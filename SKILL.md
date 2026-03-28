@@ -218,7 +218,9 @@ WebSearch: "{选题关键词} 数据 报告 2025 2026"
 - **去AI痕迹在此步执行，不是写完再改**——writing-guide.md 的 7 层规则必须在初稿阶段就全部生效
 - **编辑锚点**：在文章中 2-3 个关键位置插入 HTML 注释 `<!-- ✏️ 编辑建议：在这里加一句你自己的经历/看法 -->`，标记最适合用户加入个人色彩的位置。选择标准：(1) 观点判断处——"我觉得..."后面 (2) 案例衔接处——"我见过一个..." (3) 情绪表达处——犹豫/感慨的段落。这些锚点帮用户用最少时间完成最有效的个性化编辑
 
-**Playbook 优先**：如果 playbook.md 存在，其中的规则优先于 writing-guide.md 的通用规则。比如 playbook 说"从不用问句结尾"而 writing-guide 建议用反问句，以 playbook 为准。playbook 是用户的个性，writing-guide 是通用底线。
+**Playbook 优先**：如果 playbook.md 存在，逐条读取其中的规则，每条都作为硬性写作约束。playbook 中的规则优先于 writing-guide.md 的通用规则——比如 playbook 说"段落不超过 80 字"而 writing-guide 说"不超过 150 字"，以 playbook 为准。playbook 是从用户真实编辑行为中提炼的个性化指令，writing-guide 是通用底线。
+
+**如何使用 playbook**：不是"参考"playbook，是"执行"playbook。把每条规则当作 checklist item，写完后逐条验证是否遵守。
 
 **容器语法**（可选，适合特定内容类型）：写作时可以使用以下容器块，converter 会自动渲染为带样式的 HTML：
 - `:::dialogue` ... `:::` — 对话气泡（适合访谈/问答）
@@ -384,7 +386,7 @@ python3 {skill_dir}/toolkit/cli.py preview {markdown_path} \
 
 **关于 AI 检测**：如果用户关心 AI 检测（朱雀等工具），诚实告知：
 - "这是高质量初稿。如果你在意 AI 检测结果，建议在编辑锚点位置加入你自己的话——哪怕只改 3-5 句，检测通过率会显著提升。"
-- "每次你编辑后说'学习我的修改'，系统会学习你的写法，下次生成的初稿会越来越接近你的风格，需要的编辑量会越来越少。"
+- "编辑完成后，对我说**'学习我的修改'**，我会分析你改了什么并记住你的偏好，下次初稿会更接近你的风格。"
 
 **部分成功**：
 - 列出每步状态（成功/跳过/失败）
@@ -530,13 +532,23 @@ python3 {skill_dir}/scripts/learn_edits.py --draft {draft_path} --final {final_p
 
 ### 4. 自动触发 Playbook 更新
 
-每积累 5 次 lessons，脚本会提示更新 playbook：
+每积累 5 次 lessons，自动触发 playbook 更新：
 
 ```bash
 python3 {skill_dir}/scripts/learn_edits.py --summarize
 ```
 
-读取所有 lessons，找出反复出现的 pattern（≥2 次），将其固化到 `playbook.md` 的对应章节。
+脚本输出所有 lessons 的汇总数据。**Agent 必须执行以下步骤完成闭环**：
+
+1. 读取 summarize 输出，找出反复出现的 pattern（≥2 次）
+2. 读取当前 `{skill_dir}/playbook.md`（如果不存在则从零创建）
+3. **将 pattern 转化为可执行的写作规则**写入 playbook.md：
+   - 不要写"用户偏好简短段落"（描述性，不可执行）
+   - 要写"段落不超过 80 字，长段必须在 3 句内换行"（指令性，可执行）
+   - 每条规则必须是 Step 4 写作时能直接遵循的具体指令
+4. 保存 playbook.md
+
+**验证闭环**：playbook.md 更新后，下次执行 Step 4 时，写作指令里的"Playbook 优先"规则会自动加载新的 pattern，产出的初稿会反映用户的编辑偏好。
 
 ---
 
