@@ -37,6 +37,10 @@ allowed-tools:
 - **BLOCKED** — 关键步骤无法继续（如 Python 依赖缺失且用户拒绝安装）
 - **NEEDS_CONTEXT** — 需要用户提供信息才能继续（如首次设置需要公众号名称）
 
+**路径约定**：本文档中 `{skill_dir}` 指本 SKILL.md 所在的目录（即 WeWrite 的根目录）。
+
+**Onboard 例外**：Onboard 是交互式的（需要问用户问题），不受"全自动"约束。Onboard 完成后回到全自动管道。
+
 **辅助功能**（按需加载，不在主管道内）：
 - 用户说"重新设置风格" → `读取: {skill_dir}/references/onboard.md`
 - 用户说"学习我的修改" → `读取: {skill_dir}/references/learn-edits.md`
@@ -130,7 +134,7 @@ WebSearch: "{选题关键词} 数据 报告 2025 2026"
 
 采集 5-8 条真实素材（具名来源 + 具体数据/引述/案例）。**禁止编造**。
 
-**降级**：WebSearch 无结果 → 用 LLM 训练数据中可验证的公开信息。
+**降级**：WebSearch 无结果或不可用 → 用 LLM 训练数据中可验证的公开信息。但需告知用户："素材采集未能使用 WebSearch，文章的 AI 检测通过率会降低。建议在编辑锚点处多加入你自己的内容。"
 
 ---
 
@@ -231,7 +235,7 @@ python3 {skill_dir}/toolkit/cli.py preview {markdown} --theme {theme} --no-open 
 
 ### Step 8: 收尾
 
-**8a. 写入历史**（推送成功或降级都要写）：
+**8a. 写入历史**（推送成功或降级都要写，文件不存在则创建）：
 
 ```yaml
 # → {skill_dir}/history.yaml
