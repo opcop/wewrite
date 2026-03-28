@@ -284,6 +284,7 @@ python3 {skill_dir}/toolkit/cli.py preview {markdown} --theme {theme} --no-open 
 | 换成 XX 主题 | 重新渲染 |
 | 看看文章数据 | `读取: {skill_dir}/references/effect-review.md` |
 | 学习我的修改 | `读取: {skill_dir}/references/learn-edits.md` |
+| 做一个小绿书/图片帖 | `python3 {skill_dir}/toolkit/cli.py image-post img1.jpg img2.jpg -t "标题"` |
 
 ---
 

@@ -18,7 +18,7 @@ import yaml
 from converter import WeChatConverter, preview_html
 from theme import load_theme, list_themes
 from wechat_api import get_access_token, upload_image, upload_thumb
-from publisher import create_draft
+from publisher import create_draft, create_image_post
 
 # Config file search order
 CONFIG_PATHS = [
@@ -140,6 +140,62 @@ def cmd_themes(args):
     for name in names:
         theme = load_theme(name)
         print(f"  {name:24s} {theme.description}")
+
+
+def cmd_image_post(args):
+    """Create a WeChat image post (小绿书) from image files."""
+    cfg = load_config()
+    wechat_cfg = cfg.get("wechat", {})
+
+    appid = args.appid or wechat_cfg.get("appid")
+    secret = args.secret or wechat_cfg.get("secret")
+
+    if not appid or not secret:
+        print("Error: --appid and --secret required (or set in config.yaml)", file=sys.stderr)
+        sys.exit(1)
+
+    images = args.images
+    if not images:
+        print("Error: at least 1 image required", file=sys.stderr)
+        sys.exit(1)
+    if len(images) > 20:
+        print(f"Error: max 20 images, got {len(images)}", file=sys.stderr)
+        sys.exit(1)
+
+    token = get_access_token(appid, secret)
+    print(f"Uploading {len(images)} images as permanent materials...")
+
+    media_ids = []
+    for img_path in images:
+        p = Path(img_path)
+        if not p.exists():
+            print(f"Error: image not found: {img_path}", file=sys.stderr)
+            sys.exit(1)
+        print(f"  Uploading: {p.name}")
+        mid = upload_thumb(token, str(p))
+        media_ids.append(mid)
+        print(f"    -> {mid}")
+
+    title = args.title
+    if len(title) > 32:
+        print(f"Warning: title truncated to 32 chars (was {len(title)})")
+        title = title[:32]
+
+    content = args.content or ""
+
+    result = create_image_post(
+        access_token=token,
+        title=title,
+        image_media_ids=media_ids,
+        content=content,
+        open_comment=True,
+    )
+
+    print(f"\nImage post draft created!")
+    print(f"  media_id: {result.media_id}")
+    print(f"  images: {result.image_count}")
+    print(f"  title: {title}")
+    print(f"  请到公众号后台草稿箱检查并发布")
 
 
 def cmd_gallery(args):
@@ -327,6 +383,14 @@ def main():
     # themes
     sub.add_parser("themes", help="List available themes")
 
+    # image-post (小绿书)
+    p_imgpost = sub.add_parser("image-post", help="Create WeChat image post (小绿书)")
+    p_imgpost.add_argument("images", nargs="+", help="Image file paths (1-20, first = cover)")
+    p_imgpost.add_argument("-t", "--title", required=True, help="Post title (max 32 chars)")
+    p_imgpost.add_argument("-c", "--content", default="", help="Plain text description (max ~1000 chars)")
+    p_imgpost.add_argument("--appid", default=None, help="WeChat AppID")
+    p_imgpost.add_argument("--secret", default=None, help="WeChat AppSecret")
+
     # gallery
     p_gallery = sub.add_parser("gallery", help="Open theme gallery in browser")
     p_gallery.add_argument("input", nargs="?", default=None, help="Markdown file (optional, uses sample if omitted)")
@@ -342,6 +406,8 @@ def main():
             cmd_publish(args)
         elif args.command == "themes":
             cmd_themes(args)
+        elif args.command == "image-post":
+            cmd_image_post(args)
         elif args.command == "gallery":
             cmd_gallery(args)
     except Exception as e:
