@@ -52,7 +52,7 @@ allowed-tools:
   2. 如果有 fail 项 → 直接报告，建议修复
   3. 如果全 pass 或仅 warn → 继续 LLM 深度分析：
      - 读取 `style.yaml` 的 tone/voice 与 writing_persona，判断是否矛盾
-     - 读取 `writing-config.yaml`（如存在），检查是否有 AI 特征参数（emotional_arc: flat、paragraph_rhythm: structured、closing_style: summary）
+     - 读取 `writing-config.yaml`（如存在），检查是否有 AI 特征参数（emotional_arc: flat、paragraph_rhythm: structured、closing_tendency: summary）
      - 读取 `history.yaml` 最近 5 篇，检查 persona 使用和 WebSearch 降级情况
   4. 综合输出自然语言报告 + 按优先级排序的改进建议
 - 用户说"优化写作参数"/"优化参数"/"跑优化" → 执行以下流程：
@@ -452,7 +452,7 @@ python3 {skill_dir}/toolkit/cli.py preview {markdown} --theme {theme} --no-open 
 | 维度随机化 | history 空时跳过去重 |
 | Persona 文件不存在 | 回退到 midnight-friend（默认） |
 | 范文库为空 | Fallback 到 exemplar-seeds.yaml（通用模式） |
-| 去 AI 验证 | 3 次重写不过则跳过该项 |
+| 去 AI 验证 | 2 轮定向修复不过则跳过该项 |
 | 生图失败 | 输出提示词 |
 | 推送失败 | 本地 HTML |
 | 历史写入 | 警告不阻断 |

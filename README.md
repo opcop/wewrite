@@ -170,7 +170,7 @@ cp config.example.yaml config.yaml
 
 ```
 wewrite/
-├── SKILL.md                  # 主管道（273行，Step 1-8）
+├── SKILL.md                  # 主管道（Step 1-8）
 ├── config.example.yaml       # API 配置模板
 ├── style.example.yaml        # 风格配置模板
 ├── writing-config.example.yaml # 写作参数模板（说"优化参数"自动调优）
@@ -184,7 +184,7 @@ wewrite/
 │   ├── fetch_stats.py          # 微信文章数据回填
 │   ├── build_playbook.py       # 从历史文章生成 Playbook
 │   ├── learn_edits.py          # 学习人工修改
-│   ├── humanness_score.py      # 文章"人味"打分器（11 项检测 + 参数映射）
+│   ├── humanness_score.py      # 文章"人味"打分器（11 项检测 + 钟形曲线校正 + 过度优化惩罚）
 │   ├── extract_exemplar.py      # 范文风格提取（SICO 式 few-shot 建库）
 │   ├── diagnose.py             # 反 AI 配置诊断
 │   └── build_openclaw.py       # SKILL.md → OpenClaw 格式转换
@@ -230,7 +230,7 @@ Step 2  热点抓取 → 历史去重 + SEO → 选题
   ↓
 Step 3  框架选择 → 素材采集（WebSearch 真实数据）
   ↓
-Step 4  维度随机化 → 范文风格注入 → 写作（3层反检测 + 真实素材锚定 + 编辑锚点）
+Step 4  维度随机化 → 范文风格注入 → 写作（3层反检测 + 真实素材锚定 + 编辑锚点）→ 快速自检
   ↓
 Step 5  SEO 优化 → 去 AI 逐层验证（14 项自检 + humanness_score 打分）
   ↓
