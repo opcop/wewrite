@@ -22,6 +22,8 @@ description: |
 
 **降级原则**：每一步都有降级方案。Step 1 检测到的降级标记（`skip_publish`、`skip_image_gen`）在后续 Step 自动生效，不重复报错。
 
+**进度追踪**：主管道启动时，用 TaskCreate 为 8 个 Step 创建任务。每开始一个 Step 标记 in_progress，完成后标记 completed。用户可随时看到当前进度。
+
 **完成协议**：
 - **DONE** — 全流程完成，文章已保存/推送
 - **DONE_WITH_CONCERNS** — 完成但部分步骤降级，列出降级项
@@ -64,9 +66,26 @@ description: |
 
 ## 主管道（Step 1-8）
 
+主管道启动时，创建以下 8 个任务用于进度追踪：
+
+```
+TaskCreate: "Step 1: 环境 + 配置"
+TaskCreate: "Step 2: 选题"
+TaskCreate: "Step 3: 框架 + 素材"
+TaskCreate: "Step 4: 写作"
+TaskCreate: "Step 5: SEO + 验证"
+TaskCreate: "Step 6: 视觉 AI"
+TaskCreate: "Step 7: 排版 + 发布"
+TaskCreate: "Step 8: 收尾"
+```
+
+每开始一个 Step → TaskUpdate status=in_progress。完成 → TaskUpdate status=completed。
+
+---
+
 ### Step 1: 环境 + 配置
 
-**1a. 环境检查**（静默通过或引导修复）：
+**1.1 环境检查**（静默通过或引导修复）：
 
 ```bash
 python3 -c "import markdown, bs4, cssutils, requests, yaml, pygments, PIL" 2>&1
@@ -79,7 +98,7 @@ python3 -c "import markdown, bs4, cssutils, requests, yaml, pygments, PIL" 2>&1
 | `wechat.appid` + `secret` | 静默 | 设 `skip_publish = true` |
 | `image.api_key` | 静默 | 设 `skip_image_gen = true` |
 
-**1a-2. 版本检查**（静默通过或提醒）：
+**1.2 版本检查**（静默通过或提醒）：
 
 ```bash
 cd {baseDir} && git fetch origin main --quiet 2>/dev/null
@@ -87,10 +106,10 @@ cd {baseDir} && git fetch origin main --quiet 2>/dev/null
 
 比对本地 `{baseDir}/VERSION` 与远程 `git show origin/main:VERSION`：
 - 相同 → 静默通过
-- 不同 → 提示用户："WeWrite 有新版本可用（当前 X → 最新 Y），说「更新」即可升级。"**不阻断流程**，继续 Step 1b
+- 不同 → 提示用户："WeWrite 有新版本可用（当前 X → 最新 Y），说「更新」即可升级。"**不阻断流程**，继续 1.3
 - git 不可用（无 .git 目录或 fetch 失败）→ 静默跳过
 
-**1b. 加载风格**：
+**1.3 加载风格**：
 
 ```
 检查: {baseDir}/style.yaml
@@ -105,7 +124,7 @@ cd {baseDir} && git fetch origin main --quiet 2>/dev/null
 
 ### Step 2: 选题
 
-**2a. 热点抓取**：
+**2.1 热点抓取**：
 
 ```bash
 python3 {baseDir}/scripts/fetch_hotspots.py --limit 30
@@ -113,7 +132,7 @@ python3 {baseDir}/scripts/fetch_hotspots.py --limit 30
 
 **降级**：脚本报错 → web_search "今日热点 {topics第一个垂类}"
 
-**2b. 历史去重 + SEO**：
+**2.2 历史去重 + SEO**：
 
 ```
 读取: {baseDir}/history.yaml（不存在则跳过）
@@ -125,7 +144,7 @@ python3 {baseDir}/scripts/seo_keywords.py --json {关键词}
 
 **降级**：SEO 脚本报错 → LLM 判断
 
-**2c. 生成 10 个选题**：
+**2.3 生成 10 个选题**：
 
 ```
 读取: {baseDir}/references/topic-selection.md
@@ -140,7 +159,7 @@ python3 {baseDir}/scripts/seo_keywords.py --json {关键词}
 
 ### Step 3: 框架 + 素材
 
-**3a. 框架选择**：
+**3.1 框架选择**：
 
 ```
 读取: {baseDir}/references/frameworks.md
@@ -148,7 +167,7 @@ python3 {baseDir}/scripts/seo_keywords.py --json {关键词}
 
 5 套框架（痛点/故事/清单/对比/热点解读），自动选推荐指数最高的。
 
-**3b. 素材采集（关键——决定能否通过 AI 检测）**：
+**3.2 素材采集（关键——决定能否通过 AI 检测）**：
 
 纯 LLM 生成的内容无论技巧多好，底层 token 分布仍是 AI 的。通过检测的文章都建立在真实外部信息源之上。
 
@@ -167,34 +186,34 @@ web_search: "{选题关键词} 数据 报告 2025 2026"
 
 ```
 读取: {baseDir}/references/writing-guide.md
-读取: {baseDir}/playbook.md（如果存在，逐条执行，优先于 writing-guide）
+读取: {baseDir}/playbook.md（如果存在，按 confidence 分级执行）
 读取: {baseDir}/writing-config.yaml（如果存在，作为写作参数）
 读取: {baseDir}/history.yaml（最近 3 篇的 dimensions 字段）
 ```
 
-**4a-0. 历史最佳参数参考**（有 history.yaml 且包含 composite_score 时执行）：
+**4.1 历史最佳参数参考**（有 history.yaml 且包含 composite_score 时执行）：
 
 读取 history.yaml 中有 `composite_score` 和 `writing_config_snapshot` 的文章，找到得分最低（最人类）的一篇。如果该篇得分比当前 writing-config.yaml 的默认参数对应的历史平均分更好，在写作时**参考**其参数组合（不是覆盖 writing-config.yaml，而是作为"上次这组参数效果好"的提示）。
 
 具体：如果历史最佳文章的某个参数值与当前 writing-config 不同，在写作时倾向使用历史最佳值。如果没有历史数据，跳过此步。
 
-**4a. 维度随机化**：从 writing-guide.md 规则 3.4 维度池随机激活 2-3 个维度，对比历史去重。
+**4.2 维度随机化**：从 writing-guide.md 规则 3.4 维度池随机激活 2-3 个维度，对比历史去重。
 
-**4b. 加载写作人格**：
+**4.3 加载写作人格**：
 
 ```
 读取: {baseDir}/personas/{style.yaml 的 writing_persona 字段}.yaml
 如果 style.yaml 没有 writing_persona 字段 → 默认 midnight-friend
 ```
 
-人格文件定义了：语气浓度、数据呈现方式、情绪弧线、段落节奏、不确定性表达模板等。作为 Step 4c 的硬性约束执行。
+人格文件定义了：语气浓度、数据呈现方式、情绪弧线、段落节奏、不确定性表达模板等。作为 4.4 的硬性约束执行。
 
 **优先级**：playbook.md（confidence ≥ 5 的规则）> persona > writing-guide.md。writing-guide 是底线（禁用词等），persona 在此基础上特化风格参数，playbook 中高置信度规则是用户个性化的最终覆盖。playbook 中 confidence < 5 的规则作为软性参考。
 
-**4c. 写文章**：
+**4.4 写文章**：
 - H1 标题（20-28 字） + H2 结构，1500-2500 字
-- 真实素材锚定：Step 3b 的素材分散嵌入各 H2 段落
-- **写作人格**：按 4b 加载的人格参数写作（数据呈现方式、个人声音浓度、不确定性表达等）
+- 真实素材锚定：Step 3.2 的素材分散嵌入各 H2 段落
+- **写作人格**：按 4.3 加载的人格参数写作（数据呈现方式、个人声音浓度、不确定性表达等）
 - 3 层反检测规则（统计/语言/内容）在初稿阶段全部生效
 - 2-3 个编辑锚点：`<!-- ✏️ 编辑建议：在这里加一句你自己的经历/看法 -->`
 - 可选容器语法：`:::dialogue`、`:::timeline`、`:::callout`、`:::quote`
@@ -209,9 +228,9 @@ web_search: "{选题关键词} 数据 报告 2025 2026"
 读取: {baseDir}/references/seo-rules.md
 ```
 
-**5a. SEO**：3 个备选标题 + 摘要（≤54 字）+ 5 标签 + 关键词密度优化
+**5.1 SEO**：3 个备选标题 + 摘要（≤54 字）+ 5 标签 + 关键词密度优化
 
-**5b. 去 AI 逐层验证**（writing-guide.md 自检清单，每项必须通过）：
+**5.2 去 AI 逐层验证**（writing-guide.md 自检清单，每项必须通过）：
 
 | 层级 | 检查项 | 标准 | 规则 |
 |------|--------|------|------|
@@ -232,9 +251,9 @@ web_search: "{选题关键词} 数据 报告 2025 2026"
 
 不通过 → 定向重写该段落。3 次仍不过 → 标注跳过。
 
-**5b-2. 脚本验证**（补充逐项检查）：
+**5.3 脚本验证**（补充逐项检查）：
 
-Agent 在 5b 逐项检查时同步完成 Tier 3 评估（风格漂移、密度波浪、连贯性打破、整体人感），产出 0-1 分数。
+Agent 在 5.2 逐项检查时同步完成 Tier 3 评估（风格漂移、密度波浪、连贯性打破、整体人感），产出 0-1 分数。
 
 ```bash
 python3 {baseDir}/scripts/humanness_score.py {article_path} --json --tier3 {agent_tier3_score}
@@ -249,23 +268,23 @@ python3 {baseDir}/scripts/humanness_score.py {article_path} --json --tier3 {agen
 
 ### Step 6: 视觉 AI
 
-**如果 `skip_image_gen = true`** → 只执行 6a。
+**如果 `skip_image_gen = true`** → 只执行 6.1。
 
 ```
 读取: {baseDir}/references/visual-prompts.md
 ```
 
-**6a.** 分析文章结构，生成封面 3 组创意 + 内文 3-6 张配图提示词。
+**6.1** 分析文章结构，生成封面 3 组创意 + 内文 3-6 张配图提示词。
 
-**6b.** 调用 image_gen.py 生成图片，替换 Markdown 占位符。
+**6.2** 调用 image_gen.py 生成图片，替换 Markdown 占位符。
 
 **降级**：生图失败 → 输出提示词，继续。
 
 ---
 
-### Step 7: 预检 + 排版 + 发布
+### Step 7: 排版 + 发布
 
-**7a. Metadata 预检**（发布前必须通过）：
+**7.1 Metadata 预检**（发布前必须通过）：
 
 | 检查项 | 标准 | 不通过时 |
 |--------|------|---------|
@@ -277,7 +296,7 @@ python3 {baseDir}/scripts/humanness_score.py {article_path} --json --tier3 {agen
 
 预检全部通过后才进入排版。
 
-**7b. 排版 + 发布**：
+**7.2 排版 + 发布**：
 
 **如果 `skip_publish = true`** → 直接走 preview。
 
@@ -299,7 +318,7 @@ python3 {baseDir}/toolkit/cli.py preview {markdown} --theme {theme} --no-open -o
 
 ### Step 8: 收尾
 
-**8a. 写入历史**（推送成功或降级都要写，文件不存在则创建）：
+**8.1 写入历史**（推送成功或降级都要写，文件不存在则创建）：
 
 ```yaml
 # → {baseDir}/history.yaml
@@ -313,7 +332,7 @@ python3 {baseDir}/toolkit/cli.py preview {markdown} --theme {theme} --no-open -o
   writing_persona: "{人格名}"
   dimensions:
     - "{维度}: {选项}"
-  composite_score: {Step 5b-2 的 composite_score}  # 0=人类, 100=AI
+  composite_score: {Step 5.3 的 composite_score}  # 0=人类, 100=AI
   writing_config_snapshot:  # 本次使用的关键参数（从 writing-config.yaml 提取）
     sentence_variance: {值}
     paragraph_rhythm: "{值}"
@@ -326,20 +345,20 @@ python3 {baseDir}/toolkit/cli.py preview {markdown} --theme {theme} --no-open -o
   stats: null
 ```
 
-**8b. 回复用户**：
+**8.2 回复用户**：
 
 - 最终标题 + 2 备选 + 摘要 + 5 标签 + media_id
 - 编辑建议："文章有 2-3 个编辑锚点，建议花 3-5 分钟加入你自己的话，效果更好。"
 - 飞轮提示："编辑完成后说**'学习我的修改'**，下次初稿会更接近你的风格。"
 
-**8c. 后续操作**：
+**8.3 后续操作**：
 
 | 用户说 | 动作 |
 |--------|------|
 | 润色/缩写/扩写/换语气 | 编辑文章 |
 | 封面换暖色调 | 重新生图 |
 | 用框架 B 重写 | 回到 Step 4 |
-| 换一个选题 | 回到 Step 2c |
+| 换一个选题 | 回到 Step 2.3 |
 | 看看有什么主题 | `python3 {baseDir}/toolkit/cli.py gallery` |
 | 换成 XX 主题 | 重新渲染 |
 | 看看文章数据 | `读取: {baseDir}/references/effect-review.md` |
