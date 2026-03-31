@@ -1,7 +1,7 @@
 ---
 name: wewrite
 description: |
-  微信公众号内容全流程助手：热点抓取 → 选题 → 框架 → 写作 → SEO/去AI痕迹 → 视觉AI → 排版推送草稿箱。
+  微信公众号内容全流程助手：热点抓取 → 选题 → 框架 → 内容增强 → 写作 → SEO → 视觉AI → 排版推送草稿箱。
   触发关键词：公众号、推文、微信文章、微信推文、草稿箱、微信排版、选题、热搜、
   热点抓取、封面图、配图、写公众号、写一篇、主题画廊、排版主题、容器语法。
   也覆盖：markdown 转微信格式、学习用户改稿风格、文章数据复盘、风格设置、
@@ -47,14 +47,27 @@ allowed-tools:
 - 用户说"重新设置风格" → `读取: {skill_dir}/references/onboard.md`
 - 用户说"学习我的修改" → `读取: {skill_dir}/references/learn-edits.md`
 - 用户说"看看文章数据" → `读取: {skill_dir}/references/effect-review.md`
-- 用户说"诊断配置"/"检查反AI"/"为什么AI检测没过" → 执行以下流程：
-  1. `python3 {skill_dir}/scripts/diagnose.py --json`
-  2. 如果有 fail 项 → 直接报告，建议修复
-  3. 如果全 pass 或仅 warn → 继续 LLM 深度分析：
-     - 读取 `style.yaml` 的 tone/voice 与 writing_persona，判断是否矛盾
-     - 读取 `writing-config.yaml`（如存在），检查是否有 AI 特征参数（emotional_arc: flat、paragraph_rhythm: structured、closing_tendency: summary）
-     - 读取 `history.yaml` 最近 5 篇，检查 persona 使用和 WebSearch 降级情况
-  4. 综合输出自然语言报告 + 按优先级排序的改进建议
+- 用户说"检查一下"/"自检"/"这篇文章怎么样" → 对最近一篇生成的文章（或用户指定的文章）执行自检，输出生成报告：
+
+  **第一部分：生成档案**（告诉用户这篇文章是怎么来的）
+  1. 读取 `history.yaml` 最近一条记录，提取：
+     - 使用的框架类型 + 写作人格
+     - 激活的维度随机化组合
+     - 素材采集来源（WebSearch 还是降级到 LLM）
+     - 内容增强策略（角度发现/密度强化/细节锚定/真实体感）
+     - 范文风格库是否命中（用了哪几篇 exemplar，还是 fallback 到种子）
+     - playbook 中生效的规则条数
+  2. 如果 history.yaml 无记录或用户指定了外部文章 → 跳过此部分，提示"这篇文章不是 WeWrite 生成的，只做质量检查"
+
+  **第二部分：质量检查**（告诉用户哪里还能改）
+  1. `python3 {skill_dir}/scripts/humanness_score.py {article_path} --json`
+  2. Agent 解读 JSON 中每项得分，翻译为用户可操作的建议，格式：
+     - 每条建议定位到具体段落或句子（"第 3 段连续 4 句长度接近"）
+     - 给出具体改法（"建议把第 3 句拆成两个短句"、"这里可以加一句你自己的感受"）
+     - 按影响度排序，最多 5 条
+  3. 如果所有项得分都不错 → "这篇文章质量不错，建议在编辑锚点处加入你的个人内容就可以发了。"
+
+  **输出格式**：自然语言报告，不输出 JSON 或分数（用户不需要看数字）
 - 用户说"更新"/"更新 WeWrite"/"升级" → 在 `{skill_dir}` 执行 `git pull origin main`，完成后告知版本变化
 
 ---
@@ -398,6 +411,7 @@ python3 {skill_dir}/toolkit/cli.py preview {markdown} --theme {theme} --no-open 
   topic_source: "热点抓取"  # 或 "用户指定"
   topic_keywords: ["{词1}", "{词2}"]
   framework: "{框架}"
+  enhance_strategy: "{增强策略}"  # angle_discovery/density_boost/detail_anchoring/real_feel
   word_count: {字数}
   media_id: "{id}"  # 降级时 null
   writing_persona: "{人格名}"
@@ -436,7 +450,7 @@ python3 {skill_dir}/toolkit/cli.py preview {markdown} --theme {theme} --no-open 
 | 看看文章数据 | `读取: {skill_dir}/references/effect-review.md` |
 | 学习我的修改 | `读取: {skill_dir}/references/learn-edits.md` |
 | 做一个小绿书/图片帖 | `python3 {skill_dir}/toolkit/cli.py image-post img1.jpg img2.jpg -t "标题"` |
-| 诊断配置 / 检查反AI / 为什么AI检测没过 | `python3 {skill_dir}/scripts/diagnose.py --json` + LLM 交叉分析 |
+| 检查一下 / 自检 / 这篇文章怎么样 | 生成报告（生成档案 + 质量检查，见辅助功能） |
 | 导入范文 / 建范文库 | `python3 {skill_dir}/scripts/extract_exemplar.py article.md` |
 | 查看范文库 | `python3 {skill_dir}/scripts/extract_exemplar.py --list` |
 
