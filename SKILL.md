@@ -352,15 +352,15 @@ LLM 自行完成，不需要调用脚本。
 
 不通过 → **定向修复**：只替换不达标的具体句子/段落，不动已通过的部分。每轮最多改 3 处，改完立即重新检查该项。2 轮仍不过 → 标注跳过，继续下一项。
 
-**5.3 脚本验证**（补充逐项检查）：
+**5.3 脚本辅助验证**（补充 5.2 的逐项检查）：
 
-Agent 在 5.2 逐项检查时同步完成 Tier 3 评估（风格漂移、密度波浪、连贯性打破、整体人感），产出 0-1 分数。
+Agent 在 5.2 检查过程中同步完成综合评估（各 H2 之间的语气差异度、信息密度的高低交替、段落间的节奏变化、整体阅读流畅度），产出 0-1 分数。
 
 ```bash
 python3 {skill_dir}/scripts/humanness_score.py {article_path} --json --tier3 {agent_tier3_score}
 ```
 
-解读 JSON 中 `composite_score`：
+解读 JSON 中 `composite_score`（0=质量高, 100=问题多）：
 - < 30 → 通过，继续 Step 6
 - 30-50 → 查看 `param_scores` 中最低分的 1-2 项，只修复对应的具体句子（不重写整段），改完重新打分。1 轮即可
 - \> 50 → 取 `param_scores` 最低的 2-3 项，逐项定向修复（每项只改最相关的 1-2 处），最多 2 轮。仍 > 50 则标记 DONE_WITH_CONCERNS 继续
@@ -435,7 +435,7 @@ python3 {skill_dir}/toolkit/cli.py preview {markdown} --theme {theme} --no-open 
   dimensions:
     - "{维度}: {选项}"
   closing_type: "{收尾类型}"  # trailing_off/unanswered/scene_revert/abrupt_stop/anti_conclusion/image
-  composite_score: {Step 5.3 的 composite_score}  # 0=人类, 100=AI
+  composite_score: {Step 5.3 的 composite_score}  # 0=质量高, 100=问题多
   writing_config_snapshot:  # 本次使用的关键参数（从 writing-config.yaml 提取）
     sentence_variance: {值}
     paragraph_rhythm: "{值}"
