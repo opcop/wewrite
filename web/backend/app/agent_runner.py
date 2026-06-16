@@ -6,6 +6,8 @@ PATH / node / ANTHROPIC_API_KEY；生产应改为最小白名单环境并清除�
 """
 from __future__ import annotations
 
+import importlib.util as _ilu
+import json
 import os
 import re
 import shutil
@@ -27,6 +29,7 @@ from claude_agent_sdk import (
 )
 
 from .config import Settings, get_settings
+from .platforms import HUMANNESS_THRESHOLD, SIMILARITY_THRESHOLD
 from .store import Job
 from .workspace import agent_env, build_workspace, cleanup_workspace
 
@@ -299,3 +302,84 @@ def _generate_preview(ws: Path, md: Path, *, theme: str) -> Optional[str]:
     except Exception:  # noqa: BLE001 - 预览失败不影响主产物
         return None
     return None
+
+
+def _load_similarity():
+    """从仓库 scripts/similarity_check.py 动态加载 similarity 函数。"""
+    settings = get_settings()
+    path = settings.skill_dir / "scripts" / "similarity_check.py"
+    spec = _ilu.spec_from_file_location("similarity_check", path)
+    mod = _ilu.module_from_spec(spec)
+    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    return mod.similarity
+
+
+def gate_passes(humanness: float | None, max_similarity: float | None) -> bool:
+    if humanness is not None and humanness < HUMANNESS_THRESHOLD:
+        return False
+    if max_similarity is not None and max_similarity > SIMILARITY_THRESHOLD:
+        return False
+    return True
+
+
+_TAG_RE = re.compile(r"#(\w[\w一-鿿]*)")
+
+
+def _extract_tags(md: str) -> list[str]:
+    seen, out = set(), []
+    for m in _TAG_RE.findall(md):
+        if m not in seen:
+            seen.add(m)
+            out.append(m)
+    return out
+
+
+def _humanness_best_effort(ws: Path, filename: str) -> float | None:
+    """跑 humanness_score.py 取分；失败则返回 None（降级，不阻断）。"""
+    py = ws / ".venv" / "bin" / "python3"
+    python = str(py) if py.exists() else "python3"
+    try:
+        r = subprocess.run(
+            [python, "scripts/humanness_score.py", f"output/{filename}", "--json"],
+            cwd=str(ws), capture_output=True, timeout=120, check=False, text=True,
+        )
+        data = json.loads(r.stdout or "{}")
+        for key in ("composite", "score", "humanness"):
+            if isinstance(data.get(key), (int, float)):
+                return float(data[key])
+    except Exception:  # noqa: BLE001 - 评分失败不阻断
+        return None
+    return None
+
+
+def _collect_platform_versions(job, ws: Path, source_md: str, profiles: list) -> list[dict]:
+    out = ws / "output"
+    similarity = _load_similarity()
+    read: list[tuple] = []
+    versions: list[dict] = []
+    for prof in profiles:
+        f = out / prof.output_filename
+        if not f.is_file():
+            versions.append({"platform": prof.id, "label": prof.label,
+                             "status": "failed", "warning": "未产出该平台版本"})
+            continue
+        read.append((prof, f.read_text(encoding="utf-8")))
+    for prof, md in read:
+        sim_src = similarity(source_md, md)
+        sim_peers = max((similarity(md, other) for p2, other in read if p2.id != prof.id),
+                        default=0.0)
+        max_sim = round(max(sim_src, sim_peers), 4)
+        hu = _humanness_best_effort(ws, prof.output_filename)
+        passed = gate_passes(hu, max_sim)
+        v = {
+            "platform": prof.id, "label": prof.label, "output_kind": prof.output_kind,
+            "title": _first_heading(md) or prof.label,
+            "markdown": _rewrite_md_images(md, job) if prof.needs_images else md,
+            "images": list(getattr(job, "images", [])) if prof.needs_images else [],
+            "tags": _extract_tags(md),
+            "humanness": hu, "max_similarity": max_sim,
+            "passed": passed, "status": "done",
+            "warning": "" if passed else "未完全通过质量门（相似度偏高或反AI偏低），建议人工微调",
+        }
+        versions.append(v)
+    return versions
