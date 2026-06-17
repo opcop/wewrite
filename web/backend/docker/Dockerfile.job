@@ -1,0 +1,33 @@
+# 任务沙箱镜像：python3.11 + node + claude CLI + toolkit/backend 依赖 + 入口。
+# 构建上下文 = 仓库根：  docker build -f web/backend/docker/Dockerfile.job -t wewrite-job:latest .
+FROM python:3.11-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl ca-certificates git \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Claude CLI（SDK 在容器内拉起它，走 ANTHROPIC_* env 指向 relay）
+RUN npm install -g @anthropic-ai/claude-code
+
+# Python 依赖：backend（app.pipeline 等）+ toolkit（agent 在容器内跑的 image_gen/scoring 脚本）
+COPY web/backend/requirements.txt /tmp/backend-req.txt
+COPY requirements.txt /tmp/toolkit-req.txt
+RUN pip install --no-cache-dir -r /tmp/backend-req.txt -r /tmp/toolkit-req.txt
+
+# 烤入 backend app 包 + 入口（skill 代码运行时 ro 挂载到 /skill，不烤）
+COPY web/backend/app /app/app
+COPY web/backend/docker/job_entrypoint.py /app/job_entrypoint.py
+
+ENV PYTHONPATH=/app \
+    WEWRITE_SKILL_DIR=/skill \
+    HOME=/workspace/.home \
+    PYTHONUNBUFFERED=1
+
+# 非 root
+RUN useradd -m -u 10001 runner
+USER runner
+WORKDIR /workspace
+
+ENTRYPOINT ["python", "/app/job_entrypoint.py"]
