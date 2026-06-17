@@ -60,6 +60,18 @@ function rememberJob(id: string, kind: "generate" | "distribute") {
   try { localStorage.setItem("wewrite:job", JSON.stringify({ id, kind })); } catch {}
 }
 
+// 预览 HTML 里的 <img src> 多为相对路径（assets/...），iframe srcDoc 解析不了。
+// 用已持久化的 images（/artifacts/...）按文件名重写成后端绝对地址，使预览能显示配图。
+function embedPreviewImages(html: string, images: string[]): string {
+  const byName = new Map<string, string>(
+    images.map((u) => [u.split("/").pop() || "", artifactUrl(u)])
+  );
+  return html.replace(/(<img\b[^>]*?\bsrc=")([^"]+)(")/g, (m, pre, src, post) => {
+    const url = byName.get(src.split("/").pop() || "");
+    return url ? pre + url + post : m;
+  });
+}
+
 const GEN_NODES = ["环境检查", "选题", "框架 + 素材", "写作", "SEO + 反 AI", "配图", "排版 / 发布", "收尾"];
 const DIST_NODES = ["小红书", "抖音"];
 
@@ -606,7 +618,7 @@ export default function HomePage() {
                     content: result.preview_html ? (
                       <iframe
                         className="h-[600px] w-full rounded-md border border-border"
-                        srcDoc={result.preview_html}
+                        srcDoc={embedPreviewImages(result.preview_html, result.images || [])}
                         title="preview"
                       />
                     ) : (
