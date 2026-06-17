@@ -8,6 +8,7 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -42,13 +43,16 @@ def _extract_tags(md: str) -> list[str]:
 
 
 def _humanness_best_effort(ws: Path, filename: str) -> float | None:
-    """跑 humanness_score.py 取分；失败则返回 None（降级，不阻断）。"""
-    py = ws / ".venv" / "bin" / "python3"
-    python = str(py) if py.exists() else "python3"
+    """跑 humanness_score.py 取分；失败则返回 None（降级，不阻断）。
+
+    从 skill_dir 运行、用后端自身解释器（sys.executable，已含 toolkit 依赖），
+    文件走绝对路径 —— 不依赖工作区里有 scripts/ 软链（container 模式工作区只含可写文件）。
+    """
+    skill_dir = get_settings().skill_dir
     try:
         r = subprocess.run(
-            [python, "scripts/humanness_score.py", f"output/{filename}", "--json"],
-            cwd=str(ws), capture_output=True, timeout=120, check=False, text=True,
+            [sys.executable, "scripts/humanness_score.py", str(ws / "output" / filename), "--json"],
+            cwd=str(skill_dir), capture_output=True, timeout=120, check=False, text=True,
         )
         data = json.loads(r.stdout or "{}")
         for key in ("composite", "score", "humanness"):
@@ -208,15 +212,18 @@ def _first_heading(markdown: str) -> Optional[str]:
 
 
 def _generate_preview(ws: Path, md: Path, *, theme: str) -> Optional[str]:
-    """用 toolkit 把 Markdown 渲染成微信风格 HTML（best-effort）。"""
-    py = ws / ".venv" / "bin" / "python3"
-    python = str(py) if py.exists() else "python3"
+    """用 toolkit 把 Markdown 渲染成微信风格 HTML（best-effort）。
+
+    从 skill_dir 运行、用后端自身解释器；md/preview 走绝对路径，以兼容 container 模式
+    （工作区无 toolkit/ 软链）。
+    """
+    skill_dir = get_settings().skill_dir
     preview = ws / "output" / "preview.html"
     try:
         subprocess.run(
-            [python, "toolkit/cli.py", "preview", str(md), "--theme", theme,
+            [sys.executable, "toolkit/cli.py", "preview", str(md), "--theme", theme,
              "--no-open", "-o", str(preview)],
-            cwd=str(ws), capture_output=True, timeout=120, check=False,
+            cwd=str(skill_dir), capture_output=True, timeout=120, check=False,
         )
         if preview.exists():
             return preview.read_text(encoding="utf-8")
