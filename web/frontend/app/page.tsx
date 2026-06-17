@@ -18,6 +18,15 @@ import {
 } from "@/lib/api";
 import PublishPanel from "@/components/PublishPanel";
 import PlatformVersions from "@/components/PlatformVersions";
+import {
+  Button,
+  Textarea,
+  Checkbox,
+  Tabs,
+  Card,
+  Badge,
+  useToast,
+} from "@/components/ui";
 
 type LogLine = { kind: string; text: string };
 
@@ -53,6 +62,8 @@ export default function HomePage() {
   const [distResult, setDistResult] = useState<JobDetail | null>(null);
   const distLogRef = useRef<HTMLDivElement>(null);
   const distCancelRef = useRef<(() => void) | null>(null);
+
+  const toast = useToast();
 
   useEffect(() => {
     getPersonas().then(setPersonas).catch(() => {});
@@ -152,6 +163,7 @@ export default function HomePage() {
             pushDist("step", COMPLETION_TEXT[detail.completion] ?? detail.completion);
         } catch (err) {
           pushDist("err", String(err));
+          toast.error(String(err));
         }
         setDistributing(false);
       }
@@ -168,6 +180,7 @@ export default function HomePage() {
       await trackDistributeJob(job.id);
     } catch (err) {
       pushDist("err", String(err));
+      toast.error(String(err));
       setDistributing(false);
     }
   }
@@ -182,6 +195,7 @@ export default function HomePage() {
       await trackDistributeJob(job.id);
     } catch (err) {
       pushDist("err", String(err));
+      toast.error(String(err));
       setDistributing(false);
     }
   }
@@ -210,37 +224,56 @@ export default function HomePage() {
               push("step", COMPLETION_TEXT[detail.completion] ?? detail.completion);
           } catch (err) {
             push("err", String(err));
+            toast.error(String(err));
           }
           setRunning(false);
         }
       );
     } catch (err) {
       push("err", String(err));
+      toast.error(String(err));
       setRunning(false);
     }
   }
 
   const canPublish = account?.wechat_bound ?? false;
 
-  return (
-    <>
-      <h1>一句话，生成一篇公众号文章</h1>
-      <p className="sub">
-        热点抓取 → 选题 → 框架 → 写作 → SEO → 配图 → 微信排版 → 推送草稿箱。云端全自动，零部署。
-      </p>
+  // Log line color mapping
+  const lineClass: Record<string, string> = {
+    step: "text-accent font-medium",
+    log: "text-text/80",
+    notice: "text-amber-400",
+    tool: "text-muted",
+    err: "text-red-400",
+  };
 
-      <div className="panel">
-        <h2>写什么</h2>
-        <label>需求（一句话）</label>
-        <textarea
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          placeholder="例如：写一篇关于 AI Agent 的公众号文章"
-        />
-        <div className="row">
-          <div>
-            <label>写作人格</label>
-            <select value={persona} onChange={(e) => setPersona(e.target.value)}>
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold text-text">一句话，生成内容并一键分发多平台</h1>
+        <p className="mt-1 text-sm text-muted">
+          选题 → 写作 → 反 AI 与原创度把关 → 多平台智能改写 → 分发到公众号 · 小红书 · 抖音。
+        </p>
+      </div>
+
+      <Card className="space-y-4">
+        <h2 className="text-base font-semibold text-text">写什么</h2>
+        <div className="space-y-1">
+          <label className="text-sm text-muted">需求（一句话）</label>
+          <Textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder="例如：写一篇关于 AI Agent 的公众号文章"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <label className="text-sm text-muted">写作人格</label>
+            <select
+              value={persona}
+              onChange={(e) => setPersona(e.target.value)}
+              className="h-10 w-full rounded-md border border-border bg-surface-2 px-3 text-sm text-text focus:outline-none focus:border-accent transition-colors"
+            >
               <option value="">沿用我的默认（{account?.writing_persona ?? "…"}）</option>
               {personas.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -249,9 +282,13 @@ export default function HomePage() {
               ))}
             </select>
           </div>
-          <div>
-            <label>排版主题</label>
-            <select value={theme} onChange={(e) => setTheme(e.target.value)}>
+          <div className="space-y-1">
+            <label className="text-sm text-muted">排版主题</label>
+            <select
+              value={theme}
+              onChange={(e) => setTheme(e.target.value)}
+              className="h-10 w-full rounded-md border border-border bg-surface-2 px-3 text-sm text-text focus:outline-none focus:border-accent transition-colors"
+            >
               <option value="">沿用我的默认（{account?.theme ?? "…"}）</option>
               {themes.map((t) => (
                 <option key={t.id} value={t.id}>
@@ -263,200 +300,241 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="checkbox">
-          <input
+        <div className="space-y-2">
+          <Checkbox
             id="interactive"
-            type="checkbox"
             checked={interactive}
-            onChange={(e) => setInteractive(e.target.checked)}
-          />
-          <label htmlFor="interactive" style={{ margin: 0 }}>
+            onCheckedChange={setInteractive}
+          >
             交互模式（在选题/框架/配图处暂停确认）
-          </label>
+          </Checkbox>
+
+          <div className={!canPublish ? "pointer-events-none opacity-50" : undefined}>
+            <Checkbox
+              id="publish"
+              checked={publishDraft && canPublish}
+              onCheckedChange={setPublishDraft}
+            >
+              完成后推送到我的公众号草稿箱
+            </Checkbox>
+          </div>
         </div>
 
-        <div className="checkbox">
-          <input
-            id="publish"
-            type="checkbox"
-            checked={publishDraft && canPublish}
-            disabled={!canPublish}
-            onChange={(e) => setPublishDraft(e.target.checked)}
-          />
-          <label htmlFor="publish" style={{ margin: 0 }}>
-            完成后推送到我的公众号草稿箱
-          </label>
-        </div>
         {!canPublish && (
-          <p className="hint">
-            尚未绑定公众号。前往 <Link href="/settings">设置</Link> 绑定 appid/secret
-            后即可一键推送草稿箱（其余环节无需任何配置）。
+          <p className="text-sm text-muted">
+            尚未绑定公众号。前往{" "}
+            <Link href="/settings" className="text-accent hover:underline">
+              设置
+            </Link>{" "}
+            绑定 appid/secret 后即可一键推送草稿箱（其余环节无需任何配置）。
           </p>
         )}
 
-        <div style={{ marginTop: 18 }}>
-          <button className="btn" onClick={onSubmit} disabled={running || !prompt.trim()}>
+        <div>
+          <Button onClick={onSubmit} disabled={running || !prompt.trim()} variant="primary">
             {running ? "生成中…" : "开始生成"}
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
 
       {(lines.length > 0 || running) && (
-        <div className="panel">
-          <h2>
-            实时进度{" "}
-            {running && <span className="badge running">running</span>}
-          </h2>
-          <div className="log" ref={logRef}>
+        <Card>
+          <div className="mb-2 flex items-center gap-2">
+            <h2 className="text-base font-semibold text-text">实时进度</h2>
+            {running && <Badge tone="neutral">running</Badge>}
+          </div>
+          <div
+            ref={logRef}
+            className="h-64 overflow-y-auto rounded-md bg-surface-2 p-3 font-mono text-xs space-y-0.5"
+          >
             {lines.map((l, i) => (
-              <div key={i} className={`line ${l.kind}`}>
+              <div key={i} className={lineClass[l.kind] ?? "text-text"}>
                 {l.text}
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       )}
 
       {result && (
-        <div className="panel">
-          <h2>
-            成稿{" "}
-            <span className={`badge ${result.status}`}>{result.status}</span>{" "}
-            {result.title && <span style={{ color: "var(--muted)" }}>· {result.title}</span>}
-          </h2>
-          {result.error && <p className="log err">{result.error}</p>}
+        <Card className="space-y-4">
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-semibold text-text">成稿</h2>
+            <Badge
+              tone={
+                result.status === "done"
+                  ? "ok"
+                  : result.status === "error"
+                  ? "danger"
+                  : "neutral"
+              }
+            >
+              {result.status}
+            </Badge>
+            {result.title && (
+              <span className="text-sm text-muted">· {result.title}</span>
+            )}
+          </div>
+
+          {result.error && (
+            <p className="rounded-md bg-red-950/30 px-3 py-2 text-sm text-red-400">
+              {result.error}
+            </p>
+          )}
+
           {result.images && result.images.length > 0 && (
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+            <div className="flex flex-wrap gap-2">
               {result.images.map((src, i) => (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   key={i}
                   src={artifactUrl(src)}
                   alt={`配图 ${i + 1}`}
-                  style={{
-                    width: 120,
-                    height: 120,
-                    objectFit: "cover",
-                    borderRadius: 8,
-                    border: "1px solid var(--border)",
-                  }}
+                  className="h-28 w-28 rounded-lg border border-border object-cover"
                 />
               ))}
             </div>
           )}
+
           {result.article_markdown ? (
-            <>
-              <div className="tabs">
-                <button
-                  className={tab === "preview" ? "active" : ""}
-                  onClick={() => setTab("preview")}
-                >
-                  微信预览
-                </button>
-                <button
-                  className={tab === "markdown" ? "active" : ""}
-                  onClick={() => setTab("markdown")}
-                >
-                  Markdown
-                </button>
-                <button
-                  className="secondary"
-                  style={{ marginLeft: "auto" }}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Tabs
+                  value={tab}
+                  onValueChange={(v) => setTab(v as "preview" | "markdown")}
+                  items={[
+                    {
+                      value: "preview",
+                      label: "微信预览",
+                      content:
+                        result.preview_html ? (
+                          <iframe
+                            className="h-[600px] w-full rounded-md border border-border"
+                            srcDoc={result.preview_html}
+                            title="preview"
+                          />
+                        ) : (
+                          <p className="text-sm text-muted">
+                            未生成预览 HTML（可切到 Markdown 查看正文）。
+                          </p>
+                        ),
+                    },
+                    {
+                      value: "markdown",
+                      label: "Markdown",
+                      content: (
+                        <pre className="overflow-x-auto whitespace-pre-wrap rounded-md bg-surface-2 p-4 text-xs text-text">
+                          {result.article_markdown}
+                        </pre>
+                      ),
+                    },
+                  ]}
+                />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="ml-auto shrink-0 self-start mt-1"
                   onClick={() =>
                     navigator.clipboard.writeText(result.article_markdown ?? "")
                   }
                 >
                   复制 Markdown
-                </button>
+                </Button>
               </div>
-              {tab === "preview" ? (
-                result.preview_html ? (
-                  <iframe
-                    className="preview-frame"
-                    srcDoc={result.preview_html}
-                    title="preview"
-                  />
-                ) : (
-                  <p className="hint">未生成预览 HTML（可切到 Markdown 查看正文）。</p>
-                )
-              ) : (
-                <pre className="md">{result.article_markdown}</pre>
-              )}
-            </>
+            </div>
           ) : (
-            <p className="hint">未找到成稿文件。请查看上方进度日志排查。</p>
+            <p className="text-sm text-muted">未找到成稿文件。请查看上方进度日志排查。</p>
           )}
 
           {result.article_markdown && <PublishPanel jobId={result.id} />}
 
           {result.article_markdown && (
-            <div style={{ marginTop: 16 }}>
-              <button
-                className="btn secondary"
+            <div>
+              <Button
+                variant="secondary"
                 onClick={onDistributeFromResult}
                 disabled={distributing}
               >
                 {distributing ? "分发中…" : "分发到多平台（小红书 + 抖音）"}
-              </button>
+              </Button>
             </div>
           )}
 
           {result.platform_versions && result.platform_versions.length > 0 && (
             <PlatformVersions versions={result.platform_versions} />
           )}
-        </div>
+        </Card>
       )}
 
       {/* 分发任务进度 */}
       {(distLines.length > 0 || distributing) && (
-        <div className="panel">
-          <h2>
-            分发进度{" "}
-            {distributing && <span className="badge running">running</span>}
-          </h2>
-          <div className="log" ref={distLogRef}>
+        <Card>
+          <div className="mb-2 flex items-center gap-2">
+            <h2 className="text-base font-semibold text-text">分发进度</h2>
+            {distributing && <Badge tone="neutral">running</Badge>}
+          </div>
+          <div
+            ref={distLogRef}
+            className="h-48 overflow-y-auto rounded-md bg-surface-2 p-3 font-mono text-xs space-y-0.5"
+          >
             {distLines.map((l, i) => (
-              <div key={i} className={`line ${l.kind}`}>
+              <div key={i} className={lineClass[l.kind] ?? "text-text"}>
                 {l.text}
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       )}
 
       {/* 分发结果（多平台版本） */}
       {distResult && distResult.platform_versions && distResult.platform_versions.length > 0 && (
-        <div className="panel">
-          <h2>
-            多平台版本{" "}
-            <span className={`badge ${distResult.status}`}>{distResult.status}</span>
-          </h2>
-          {distResult.error && <p className="log err">{distResult.error}</p>}
+        <Card className="space-y-3">
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-semibold text-text">多平台版本</h2>
+            <Badge
+              tone={
+                distResult.status === "done"
+                  ? "ok"
+                  : distResult.status === "error"
+                  ? "danger"
+                  : "neutral"
+              }
+            >
+              {distResult.status}
+            </Badge>
+          </div>
+          {distResult.error && (
+            <p className="rounded-md bg-red-950/30 px-3 py-2 text-sm text-red-400">
+              {distResult.error}
+            </p>
+          )}
           <PlatformVersions versions={distResult.platform_versions} />
-        </div>
+        </Card>
       )}
 
       {/* 带稿来：直接粘贴正文进行多平台分发 */}
-      <div className="panel">
-        <h2>带稿来 · 直接分发已有文章</h2>
-        <p className="hint">粘贴任意文章正文，自动改写为小红书和抖音风格版本。</p>
-        <label>文章正文（Markdown 或纯文本）</label>
-        <textarea
-          value={srcText}
-          onChange={(e) => setSrcText(e.target.value)}
-          placeholder="在此粘贴文章内容…"
-          style={{ minHeight: 140 }}
-        />
-        <div style={{ marginTop: 12 }}>
-          <button
-            className="btn"
+      <Card className="space-y-3">
+        <h2 className="text-base font-semibold text-text">带稿来 · 直接分发已有文章</h2>
+        <p className="text-sm text-muted">粘贴任意文章正文，自动改写为小红书和抖音风格版本。</p>
+        <div className="space-y-1">
+          <label className="text-sm text-muted">文章正文（Markdown 或纯文本）</label>
+          <Textarea
+            value={srcText}
+            onChange={(e) => setSrcText(e.target.value)}
+            placeholder="在此粘贴文章内容…"
+            className="min-h-[140px]"
+          />
+        </div>
+        <div>
+          <Button
+            variant="primary"
             onClick={onDistributeFromText}
             disabled={distributing || !srcText.trim()}
           >
             {distributing ? "分发中…" : "开始分发"}
-          </button>
+          </Button>
         </div>
-      </div>
-    </>
+      </Card>
+    </div>
   );
 }
