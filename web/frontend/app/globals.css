@@ -1,3 +1,25 @@
+@import "tailwindcss";
+
+@theme {
+  /* 精修深色主题 token */
+  --color-bg: #0d0f13;
+  --color-surface: #14171e;
+  --color-surface-2: #1b1f29;
+  --color-border: #2a2f3a;
+  --color-text: #e8eaf0;
+  --color-muted: #99a2b2;
+  --color-accent: #5b8cff;
+  --color-accent-fg: #ffffff;
+  --color-success: #2bd4a0;
+  --color-danger: #ff6b6b;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+}
+
+body { position: relative; }  /* Base UI: iOS Safari 弹层修正 */
+
 :root {
   --bg: #0f1115;
   --panel: #171a21;
