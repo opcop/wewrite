@@ -32,6 +32,7 @@ import hmac
 import json
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -876,20 +877,66 @@ def generate_image(
     )
 
 
+def generate_batch(items, config=None, max_workers=4):
+    """并发生成多张图，每张仍独立走多 provider fallback。
+
+    把"并行"放进工具里（而非依赖编排模型一轮内发多个工具调用——实测模型做不到），
+    一次调用即可生成全部配图：省掉 5-7 个串行轮次，并把每张 ~15s 的 API 等待并行化。
+
+    items: [{"prompt": str, "output": str, "size": str}]
+    返回: [{"output": str, "ok": bool, "error"?: str}]，顺序与 items 对齐。
+    """
+    if config is None:
+        config = _load_config()
+    results = [None] * len(items)
+
+    def _one(idx, it):
+        try:
+            path = generate_image(it["prompt"], it["output"],
+                                  size=it.get("size", "cover"), config=config)
+            return idx, {"output": path, "ok": True}
+        except Exception as e:  # noqa: BLE001 - 单张失败不拖垮整批
+            return idx, {"output": it.get("output"), "ok": False,
+                         "error": f"{type(e).__name__}: {e}"}
+
+    workers = min(max_workers, max(1, len(items)))
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        futs = [ex.submit(_one, i, it) for i, it in enumerate(items)]
+        for f in as_completed(futs):
+            idx, r = f.result()
+            results[idx] = r
+    return results
+
+
 def main():
     ap = argparse.ArgumentParser(description="Generate images using AI")
-    ap.add_argument("--prompt", required=True, help="Image generation prompt")
-    ap.add_argument("--output", required=True, help="Output file path")
+    ap.add_argument("--prompt", help="Image generation prompt (single mode)")
+    ap.add_argument("--output", help="Output file path (single mode)")
     ap.add_argument("--size", default="cover",
                     help="Size: cover, article, vertical, square, or WxH")
     ap.add_argument("--provider", default=None,
                     help=f"Override provider ({', '.join(PROVIDERS)})")
+    ap.add_argument("--manifest",
+                    help="JSON 文件 [{prompt,output,size}]：一次并发生成多张（推荐用于配图批量）")
     args = ap.parse_args()
 
     try:
         config = _load_config()
         if args.provider:
             config.setdefault("image", {})["provider"] = args.provider
+
+        if args.manifest:
+            with open(args.manifest, encoding="utf-8") as f:
+                items = json.load(f)
+            results = generate_batch(items, config=config)
+            ok = sum(1 for r in results if r["ok"])
+            print(json.dumps({"batch": True, "total": len(results), "ok": ok,
+                              "failed": len(results) - ok, "results": results},
+                             ensure_ascii=False))
+            sys.exit(0 if ok == len(results) else 2)
+
+        if not args.prompt or not args.output:
+            ap.error("single 模式需要 --prompt 和 --output；批量请用 --manifest")
         path = generate_image(args.prompt, args.output, size=args.size, config=config)
         print(f"Image saved: {path}")
     except Exception as e:

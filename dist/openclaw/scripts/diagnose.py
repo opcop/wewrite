@@ -13,6 +13,7 @@ Usage:
 import argparse
 import importlib
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -77,42 +78,59 @@ def check_dependencies():
     )]
 
 
+def _env_set(*names):
+    """True if all named env vars are non-empty (container injects secrets via env)."""
+    return all(os.environ.get(n, "").strip() for n in names)
+
+
 def check_config():
-    """Group 2: Check config.yaml and its fields."""
+    """Group 2: Check config.yaml + env-injected secrets.
+
+    线上容器把密钥经环境变量注入（WECHAT_*/WEWRITE_IMAGE_*/WEWRITE_WRITER_*），
+    config.yaml 往往只有非敏感默认值。所以这里 config 与 env **任一**满足即算配置好，
+    避免把已注入的密钥误判成缺失而错误置 skip_*。
+    """
     checks = []
     config_path = SKILL_ROOT / "config.yaml"
+    cfg = {}
+    if config_path.exists():
+        checks.append(make_check("config", "config_file", "pass", "found"))
+        with open(config_path, "r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f) or {}
+    else:
+        checks.append(make_check("config", "config_file", "warn",
+                                 "no config.yaml → 仅按环境变量判断"))
 
-    if not config_path.exists():
-        checks.append(make_check(
-            "config", "config_file", "warn",
-            "not found → publish and image generation disabled",
-            impact="skip_publish,skip_image_gen",
-        ))
-        # Can't check fields if file missing
-        checks.append(make_check("config", "wechat_credentials", "warn", "no config.yaml", impact="skip_publish"))
-        checks.append(make_check("config", "image_api_key", "warn", "no config.yaml", impact="skip_image_gen"))
-        return checks
-
-    checks.append(make_check("config", "config_file", "pass", "found"))
-
-    with open(config_path, "r", encoding="utf-8") as f:
-        cfg = yaml.safe_load(f) or {}
-
-    # WeChat credentials
-    wechat = cfg.get("wechat", {})
-    if wechat.get("appid") and wechat.get("secret"):
+    # WeChat credentials: config.yaml 或 env 任一齐全即可
+    wechat = cfg.get("wechat", {}) or {}
+    if (wechat.get("appid") and wechat.get("secret")) or _env_set("WECHAT_APPID", "WECHAT_SECRET"):
         checks.append(make_check("config", "wechat_credentials", "pass", "configured"))
     else:
-        checks.append(make_check("config", "wechat_credentials", "warn", "missing appid/secret", impact="skip_publish"))
+        checks.append(make_check("config", "wechat_credentials", "warn",
+                                 "missing appid/secret", impact="skip_publish"))
 
-    # Image API key
-    image = cfg.get("image", {})
-    if image.get("api_key"):
+    # Image: config.image.api_key 或 env WEWRITE_IMAGE_API_KEY 任一即可
+    image = cfg.get("image", {}) or {}
+    if image.get("api_key") or _env_set("WEWRITE_IMAGE_API_KEY"):
         checks.append(make_check("config", "image_api_key", "pass", "configured"))
     else:
-        checks.append(make_check("config", "image_api_key", "warn", "missing → image generation will be skipped", impact="skip_image_gen"))
+        checks.append(make_check("config", "image_api_key", "warn",
+                                 "missing → image generation will be skipped", impact="skip_image_gen"))
 
     return checks
+
+
+def runtime_flags(checks):
+    """管道运行标记，供 SKILL.md Step 1 一次性读取（env 优先，与 check_config 同源）。"""
+    def warned(name):
+        return any(c["name"] == name and c["status"] != "pass" for c in checks)
+    return {
+        # 没有微信凭证 → 跳过发布；没有图片 key → 跳过生图
+        "skip_publish": warned("wechat_credentials"),
+        "skip_image_gen": warned("image_api_key"),
+        # 配了写作模型（混合路由）→ Step 4 走 llm_write.py；否则编排器自写
+        "use_writer_model": _env_set("WEWRITE_WRITER_API_KEY"),
+    }
 
 
 def check_style():
@@ -327,6 +345,7 @@ def format_json(checks, summary, recs):
         "summary": summary,
         "recommendations": recs,
         "files": file_status_map(checks),
+        "flags": runtime_flags(checks),
     }, ensure_ascii=False, indent=2)
 
 

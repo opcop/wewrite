@@ -66,32 +66,23 @@ allowed-tools:
 
 ### Step 1: 环境 + 配置
 
-**1.1 环境检查**（静默通过或引导修复）：
+**1.1 环境 + 配置自检**（**一条命令拿全部降级标记**，别再逐项手查/逐个读文件）：
 
 ```bash
 # 优先用 venv 解释器（PEP 668 环境下依赖装在 .venv 里）；后续所有 python3 调用同此规则
 PY="{skill_dir}/.venv/bin/python3"; [ -x "$PY" ] || PY="python3"
-"$PY" -c "import markdown, bs4, cssutils, requests, yaml, pygments, PIL" 2>&1
+"$PY" {skill_dir}/scripts/diagnose.py --json
 ```
 
-| 检查项 | 通过 | 不通过 |
-|--------|------|--------|
-| `config.yaml` 存在 | 静默 | 引导创建，或设 `skip_publish = true` |
-| Python 依赖 | 静默 | 引导执行 `bash {skill_dir}/install.sh`（自动建 .venv 装依赖，解决 macOS PEP 668 报错）；若环境无此限制也可 `pip install -r requirements.txt` |
-| `wechat.appid` + `secret` | 静默 | 设 `skip_publish = true` |
-| `image.api_key` 或 `image.providers` 至少一项有效 | 静默 | 设 `skip_image_gen = true` |
-| `references/exemplars/index.yaml` | 静默 | 提示："范文库为空。如果你有已发布的文章（markdown），可以说**'导入范文'**建立风格库，写出来的文章会更像你。没有也不影响使用。" |
+读返回 JSON 的 `flags` 与 `summary`（diagnose 已涵盖依赖检查 + config/env 双源识别，不必再单独 import 测试或读 config.yaml）：
+- `flags.skip_publish` / `flags.skip_image_gen` → 记下，Step 6/7 自动遵守（true 时分别跳过生图/发布）。
+- `flags.use_writer_model` → 记下，**Step 4 据此选写作模式**：`true`=配了写作模型（混合路由，走 `llm_write.py`）；`false`（默认）=编排器自写。
+- `summary.failures > 0`（依赖缺失）→ 引导 `bash {skill_dir}/install.sh`（建 .venv 装依赖，解决 macOS PEP 668）；否则静默继续。
+- 若 `files.exemplars` 为空可顺带提示一次"可说**'导入范文'**建风格库"，不阻断。
 
-**1.2 版本检查**（静默通过或提醒）：
+**1.2 版本检查**（仅本地交互式 skill 安装；云端/容器跳过）：
 
-```bash
-cd {skill_dir} && git fetch origin main --quiet 2>/dev/null
-```
-
-比对本地 `{skill_dir}/VERSION` 与远程 `git show origin/main:VERSION`：
-- 相同 → 静默通过
-- 不同 → 提示用户："WeWrite 有新版本可用（当前 X → 最新 Y），说「更新」即可升级。"**不阻断流程**，继续 1.3
-- git 不可用（无 .git 目录或 fetch 失败）→ 静默跳过
+`{skill_dir}` 是 git 仓库（存在 `.git`）且当前是交互式使用时，才比对本地 `VERSION` 与 `git show origin/main:VERSION`，不同则提示"说「更新」升级"（不阻断）。**容器/云端部署没有 `.git`、也不该让 agent 自更新（更新走重新部署）→ 直接跳过本步，不要跑 git 命令。**
 
 **1.3 加载风格**：
 
@@ -187,7 +178,11 @@ python3 {skill_dir}/scripts/seo_keywords.py --json {关键词}
 
 ### Step 4: 写作
 
-> **🔴 本步写作模式默认是「委托写作模型」（详见 4.4）**：你负责编排——定框架、备真实素材锚点、组装 brief、打分驱动改写；**正文由 `scripts/llm_write.py` 出稿，不是你亲手写**。只有该工具 exit 3 / 4（未配/失败）时才回退到自己写。下面 4.1-4.3 读取的文件是**给 brief 备料**，读完别顺手就开始写文章。
+> **🔴 写作模式取决于 Step 1 的 `flags.use_writer_model`（详见 4.4），别两种都做**：
+> - **`false`（默认 · 编排器自写）** → 你直接按"写作规范"写正文。**不要调用 `llm_write.py`**（没配写作模型，调了必然 exit 3、白费一轮）。
+> - **`true`（混合路由 · 配了写作模型）** → 你只编排，正文交 `scripts/llm_write.py` 出稿。
+>
+> 下面 4.1-4.3 读取的文件两种模式都要（自写时是写作依据；委托时是 brief 备料）。
 
 ```
 读取: {skill_dir}/references/anti-ai-writing-system.md
@@ -272,20 +267,14 @@ Category 映射规则：
 
 建库命令：`python3 {skill_dir}/scripts/extract_exemplar.py article.md`
 
-**4.4 写文章** —— 本步只产出 `output/article.md`。
+**4.4 写文章** —— 本步只产出 `output/article.md`。按 Step 1 的 `flags.use_writer_model` **二选一**，别两种都走：
 
-**🔴 默认走"委托写作模型"这条主路径，别上来就自己写。你的角色是编排，不是执笔。**
+**A. 自写模式（`use_writer_model = false`，默认 · 全 DeepSeek）**：按下面"写作规范"直接把正文写进 `output/article.md`，写完执行 4.5。**不要调用 `llm_write.py`**——没配写作模型，调它只会 exit 3、白白多耗一轮。
 
-1. 把【Step 3 框架大纲 + **Step 3.2 的真实素材锚点（具体数字/工具名/价格/案例——必须逐条写进去；写作模型只在给定事实上组织语言，严禁编造任何数字或事实）** + 4.1 维度 + 4.2 人格要点 + 4.3 范文风格片段 + 下面"写作规范"的全部要求 + 目标字数 + 可用容器语法 + 编辑锚点要求】组装成一份 brief，写到 `output/_brief.md`。
-2. 调用写作工具（**这一步必做，不要跳过去自己写**）：
-   ```bash
-   python3 {skill_dir}/scripts/llm_write.py --brief output/_brief.md --output output/article.md
-   ```
-3. 按**退出码**处理：
-   - **exit 0**（stdout 是 JSON 摘要）→ 正文已写入 `output/article.md`。**不要 cat / 读取全文**（靠 Step 5 评分驱动改写，正文不进你的上下文——这是省钱命门；只有 Step 5.2 的 Tier-3 终检允许读一次全文）。**跳过 4.5**，直接进 Step 5。
-   - **exit 3**（未配写作模型）或 **exit 4**（调用失败）→ 这时才走下面的"自己写"。
-
-**自己写**（仅当上面工具 exit 3 / 4 时）：按"写作规范"把正文写进 `output/article.md`，并执行 4.5。
+**B. 委托模式（`use_writer_model = true`，混合路由 · 配了写作模型）**：你只编排，正文交给写作模型：
+1. 把【Step 3 框架大纲 + **Step 3.2 的真实素材锚点（具体数字/工具名/价格/案例——逐条写进去；写作模型只在给定事实上组织语言，严禁编造）** + 4.1 维度 + 4.2 人格要点 + 4.3 范文风格片段 + 下面"写作规范"全部要求 + 目标字数 + 可用容器语法 + 编辑锚点要求】组装成 brief，写到 `output/_brief.md`。
+2. 调：`python3 {skill_dir}/scripts/llm_write.py --brief output/_brief.md --output output/article.md`
+3. 按退出码：**exit 0**（stdout 是摘要）→ 正文已写入，**不要 cat / 读全文**（靠 Step 5 评分驱动改写——省钱命门；只有 Step 5.2 Tier-3 终检读一次全文），**跳过 4.5** 直接进 Step 5。**exit 3 / 4**（没配/失败）→ 退回 A 自写。
 
 **写作规范**（自己写时直接执行；委托写作模型时这些就是 brief 的内容要求）：
 - **🔴 出稿契约**：严格按 `references/anti-ai-writing-system.md` 的反 AI 写作铁律**逐条满足**（句长强烈交替 / 段落长短交替 / 杜绝 AI 腔词 / 事实零编造 / 情绪有起伏 / 少副词 / 口语化自我修正 / 不堆整齐小标题），违反任一条直接重写。这是把 composite 压到 <30 的关键，下面的细则与之一致。
@@ -327,7 +316,7 @@ LLM 自行完成，不需要调用脚本。
 
 **5.2 质量验证**（两个维度，每项逐一检查）：
 
-> **混合路由模式下**（Step 4.4 走了 llm_write.py）：A. 写作质量（Tier 1/2）交给 5.3 的脚本程序化把关，**不用逐句读**。你只需**读一次 `output/article.md` 全文**做 B. 内容质量 + 真实锚定/具体性（Tier-3）的终检——**这是你唯一一次把正文读进上下文**，据此给出 5.3 的 `agent_tier3_score`。自己写的模式下，A、B 都按下面逐项查。
+> **委托模式下**（Step 4.4 走了 llm_write.py）：A. 写作质量（Tier 1/2）交给 5.3 的脚本程序化把关，**不用逐句读**。你只需**读一次 `output/article.md` 全文**做 B. 内容质量 + 真实锚定/具体性（Tier-3）的终检——**这是你唯一一次把正文读进上下文**，据此给出 5.3 的 `agent_tier3_score`。自写模式下，A、B 都按下面逐项查。
 
 **A. 写作质量**（writing-guide.md 基础规则）：
 
@@ -360,7 +349,7 @@ LLM 自行完成，不需要调用脚本。
 Agent 在 5.2 检查过程中同步完成综合评估（各 H2 之间的语气差异度、信息密度的高低交替、段落间的节奏变化、整体阅读流畅度），产出 0-1 分数。
 
 ```bash
-python3 {skill_dir}/scripts/humanness_score.py {article_path} --json --tier3 {agent_tier3_score}
+python3 {skill_dir}/scripts/humanness_score.py output/article.md --json --tier3 {agent_tier3_score}
 ```
 
 解读 JSON 中 `composite_score`（0=质量高, 100=问题多）：
@@ -368,9 +357,9 @@ python3 {skill_dir}/scripts/humanness_score.py {article_path} --json --tier3 {ag
 - 30-50 → 看 `param_scores` 最低的 1-2 项做定向修复，重新打分**恰好 1 次**；之后只要 < 50 就进 Step 6，**不得追加第 2 轮**（实测追加常使分数不降反升）
 - \> 50 → 取最低的 2-3 项定向修复，**最多 2 轮**；任一轮 < 50 或较上一轮无改善即停；仍 > 50 标 DONE_WITH_CONCERNS 继续
 
-**「定向修复」按模式分**：
-- **自己写模式**：直接编辑 `output/article.md` 里不达标的具体句子（不重写整段，每轮最多改 3 处）。
-- **混合路由模式**：**不要手改全文**。把「上一稿分数 + 最弱的 1-3 个 param + 具体改写要求（如"句长再拉开差距、第2段太整齐拆短句、补 X 处真实数据"）」追加写进 `output/_brief.md`，重新调 `python3 {skill_dir}/scripts/llm_write.py --brief output/_brief.md --output output/article.md` 重生成，再打分。除 5.2 的那一次 Tier-3 终检外，仍不把正文读进上下文。
+**「定向修复」按模式分**（看 `flags.use_writer_model`）：
+- **自写模式**：直接编辑 `output/article.md` 里不达标的具体句子（不重写整段，每轮最多改 3 处）。
+- **委托模式**：**不要手改全文**。把「上一稿分数 + 最弱的 1-3 个 param + 具体改写要求（如"句长再拉开差距、第2段太整齐拆短句、补 X 处真实数据"）」追加写进 `output/_brief.md`，重新调 `python3 {skill_dir}/scripts/llm_write.py --brief output/_brief.md --output output/article.md` 重生成，再打分。除 5.2 的那一次 Tier-3 终检外，仍不把正文读进上下文。
 
 ---
 
@@ -389,18 +378,19 @@ python3 {skill_dir}/scripts/humanness_score.py {article_path} --json --tier3 {ag
 2. **从选定的封面提示词文本**（而非已渲染的图）提取视觉锚点：色板 hex、风格关键词、画面调性。锚点来自提示词本身，所以无需等封面图回来就能继续。
 3. 分析文章结构，为每个需要配图的段落选图片类型（infographic/scene/flowchart/comparison/framework/timeline），按 visual-prompts.md 模板写 3-6 张内文配图提示词；每张都引用第 2 步的视觉锚点，保证全文视觉一致。
 
-**6.3 一次性并行生成**：把封面 + 全部内文配图在**同一轮里并行发出**（一次性给出所有 image_gen.py 命令），不要逐张串行等待。封面用 `--size cover`，内文配图用 `--size article`；多 provider 自动 fallback 已内置。
+**6.3 生成全部图片（封面 + 内文配图，必须实际生成 .png，不能只写提示词就算完成）**：把封面与每张内文配图都用 `image_gen.py` 实际生成出来。封面 `--size cover`，内文配图 `--size article`；多 provider 自动 fallback 已内置。**一次性把全部命令发出**（环境支持并行工具调用就并行，不支持就顺序，但务必把全部图都生成）：
 
 ```bash
 python3 {skill_dir}/toolkit/image_gen.py --prompt "{封面提示词}" --output {skill_dir}/output/{slug}-cover.png --size cover
 python3 {skill_dir}/toolkit/image_gen.py --prompt "{配图1提示词}" --output {skill_dir}/output/{slug}-fig1.png --size article
 python3 {skill_dir}/toolkit/image_gen.py --prompt "{配图2提示词}" --output {skill_dir}/output/{slug}-fig2.png --size article
-# …其余配图同理，全部在同一轮一起发出
+# …其余配图同理，全部生成
 ```
-（环境不支持并行工具调用时可退化为顺序调用，但务必把全部图都生成。）
+> 提示词只是中间产物——**Step 6 完成的标志是 `output/` 下真的出现了这些 .png 文件**，不是把提示词写进某个 md 就完事。
+> 也可用一条命令批量并发（等价、工具内并行）：把 `[{"prompt","output","size"}…]` 写进 `output/_images.json`，再 `python3 {skill_dir}/toolkit/image_gen.py --manifest {skill_dir}/output/_images.json`。
 
 **6.4 一次性验证 + 插入**：
-- **全自动模式**：所有图返回后，**在一轮内**统一读取全部生成图做一次性自检——每张的核心实体是否可识别、风格是否一致。只对明显失败（实体不可辨 / 风格跑偏）的那一张换提示词重试 1 次，其余直接采用。**不要逐张读图、逐张推理**（那会把一次检查拆成多轮，显著拖慢）。
+- **全自动模式**：所有图返回后，**在一轮内**统一确认每张 .png 都已生成（核心实体可识别、风格一致）。只对明显失败（实体不可辨 / 风格跑偏 / 没生成）的那一张换提示词重试 1 次，其余直接采用。**不要逐张读图、逐张推理**（那会把一次检查拆成多轮，显著拖慢）。
 - **交互模式**：展示封面（及配图），问用户"效果如何？"，不满意再针对性重生成。
 
 确认后把对应的 Markdown 图片占位符一次性替换为实际路径。
