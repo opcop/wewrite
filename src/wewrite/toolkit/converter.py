@@ -477,6 +477,8 @@ class WeChatConverter:
         text = self._process_callout(text)
         text = self._process_quote_block(text)
         text = self._process_pullquote(text)
+        text = self._process_label(text)
+        text = self._process_steps(text)
         text = self._process_highlight(text)
         text = self._process_summary(text)
         return text
@@ -581,6 +583,61 @@ class WeChatConverter:
                 f'</section>')
 
         return re.sub(r':::pullquote\n(.*?)\n:::', replace_pullquote, text, flags=re.DOTALL)
+
+    def _process_label(self, text: str) -> str:
+        """Convert :::label blocks to mini section labels（小标签标题）.
+
+        语法：:::label\n文字\n:::（左竖条式，默认）
+              :::label pill\n文字\n:::（实色药丸式）
+        """
+        primary = self._theme.colors.get("primary", "#2563eb")
+
+        def replace_label(match):
+            variant = (match.group(1) or "").strip().lower()
+            content = self._inline_md(match.group(2).strip())
+            if variant == "pill":
+                return (
+                    f'<section style="margin: 28px 0 14px">'
+                    f'<span style="display: inline-block; background: {primary}; color: #ffffff; '
+                    f'font-size: 13px; font-weight: 700; padding: 4px 14px; border-radius: 999px; '
+                    f'letter-spacing: 1px">{content}</span></section>')
+            return (
+                f'<section style="display: flex; align-items: center; margin: 28px 0 14px">'
+                # 竖条装饰内置占位，防微信剥空元素样式
+                f'<section style="flex-shrink: 0; width: 4px; height: 16px; background: {primary}; '
+                f'border-radius: 2px; margin-right: 8px"><span leaf=""><br></span></section>'
+                f'<section style="font-size: 16px; font-weight: 700; color: #1a1a1a">{content}</section>'
+                f'</section>')
+
+        return re.sub(r':::label[ \t]*(\w*)\n(.*?)\n:::', replace_label, text, flags=re.DOTALL)
+
+    def _process_steps(self, text: str) -> str:
+        """Convert :::steps blocks to numbered step cards（步骤卡）.
+
+        每行一个步骤，支持行内 Markdown（如 **标题** 描述）。
+        编号圆点用 line-height 垂直居中——微信对 flex 居中支持有限。
+        """
+        primary = self._theme.colors.get("primary", "#2563eb")
+
+        def replace_steps(match):
+            items = []
+            n = 0
+            for line in match.group(1).strip().split('\n'):
+                line = line.strip().lstrip('-').strip()
+                if not line:
+                    continue
+                n += 1
+                items.append(
+                    f'<section style="display: flex; margin-bottom: 14px">'
+                    f'<section style="flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; '
+                    f'background: {primary}; color: #ffffff; font-size: 13px; font-weight: 700; '
+                    f'text-align: center; line-height: 22px; margin-right: 10px">{n}</section>'
+                    f'<section style="flex: 1; font-size: 15px; line-height: 1.7; padding-top: 1px">'
+                    f'{self._inline_md(line)}</section>'
+                    f'</section>')
+            return '<section style="margin: 20px 0">' + '\n'.join(items) + '</section>'
+
+        return re.sub(r':::steps\n(.*?)\n:::', replace_steps, text, flags=re.DOTALL)
 
     def _number_sections(self, html: str) -> str:
         """给 H2 加两位数章节编号（01/02/…）。主题 YAML 顶层 section_numbering: true 启用。"""

@@ -301,7 +301,7 @@ Category 映射规则：
 - **写作规范**：writing-guide.md 中的基础规则（禁用词、句长方差、词汇混用等）在初稿阶段生效
 - **分段实时自检**：读取 `{skill_dir}/references/realtime-check.md`，每写完约 500 字（或每个 H2）就地执行 5 项快速检查（句长交替 / 情绪锚定 / 词汇温度 / 素材锚定 / 句法变形），问题当场掐掉不累积到全文。按 500 字/H2 粒度查，不要写一句修一句；也不要为凑检查项刻意制造大量单句段落（会触发过度优化检测）
 - 2-3 个编辑锚点：`<!-- ✏️ 编辑建议：在这里加一句你自己的经历/看法 -->`
-- 可选容器语法：`:::dialogue`、`:::timeline`、`:::callout`、`:::quote`、`:::highlight`（琥珀高亮框）、`:::summary`（青色总结框）
+- 可选容器语法：`:::dialogue`、`:::timeline`、`:::callout`、`:::quote`、`:::pullquote`（金句居中）、`:::label`/`:::label pill`（小标签标题）、`:::steps`（编号步骤卡）、`:::highlight`（琥珀高亮框）、`:::summary`（青色总结框）
 
 保存到 `{home}/output/article.md`（全流程统一用这个工作文件名；委托写作模型与自己写都写这里）
 

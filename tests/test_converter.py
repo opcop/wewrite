@@ -577,3 +577,33 @@ class TestTypographyR1:
         assert ">01</span>" in html and ">02</span>" in html
         html_off = self._conv().convert("## 一\n\nx").html
         assert ">01</span>" not in html_off
+
+
+class TestTypographyR2:
+    """排版增强 R2：:::label 小标签标题、:::steps 步骤卡。"""
+
+    def _conv(self):
+        return WeChatConverter(theme=load_theme("professional-clean", THEMES_DIR))
+
+    def test_label_bar_default(self):
+        html = self._conv().convert(":::label\n工具清单\n:::").html
+        assert "工具清单" in html and ":::" not in html
+        assert "width: 4px" in html  # 左竖条
+        assert '<span leaf=""><br/></span>' in html.replace("<br>", "<br/>")  # 占位
+
+    def test_label_pill_variant(self):
+        html = self._conv().convert(":::label pill\n步骤一\n:::").html
+        assert "border-radius: 999px" in html and "步骤一" in html
+
+    def test_steps_numbered(self):
+        md = ":::steps\n安装依赖\n**配置** config.yaml\n推送草稿箱\n:::"
+        html = self._conv().convert(md).html
+        assert ">1</section>" in html and ">2</section>" in html and ">3</section>" in html
+        assert "<strong" in html and "配置" in html and "推送草稿箱" in html
+        assert "line-height: 22px" in html  # 圆点不用 flex 居中
+
+    def test_r2_passes_validator(self):
+        from wewrite.commands.validate_html import validate_html
+        md = ":::label pill\nA\n:::\n\n:::steps\n一\n二\n:::"
+        html = self._conv().convert(md).html
+        assert [i for i in validate_html(html) if i["level"] == "ERROR"] == []
