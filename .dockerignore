@@ -1,9 +1,0 @@
-# 任务镜像构建上下文 = 仓库根；排除大目录与无关物，避免把整个仓库传给 docker daemon。
-.git
-web/frontend
-**/__pycache__
-**/.venv
-**/node_modules
-docs
-example
-output
