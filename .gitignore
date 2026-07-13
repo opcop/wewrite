@@ -12,15 +12,8 @@ lessons/
 writing-config.yaml
 optimization-results.tsv
 
-# Generated output
+# Generated output（v2.2 起在 ~/.wewrite/，此规则防本地遗留误交）
 output/
-!output/.gitkeep
-
-# Exemplar library (user-specific content)
-references/exemplars/*.md
-references/exemplars/index.yaml
-# Build artifact: build_openclaw.py mirrors local exemplars into dist; never commit user content
-dist/openclaw/references/exemplars/
 
 # User-local reference/draft articles (external 爆款范文 collection, not part of the skill)
 example/
