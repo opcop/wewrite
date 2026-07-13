@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Build](https://github.com/imraywang/wewrite/actions/workflows/build-openclaw.yml/badge.svg)](https://github.com/imraywang/wewrite/actions)
-[![Version](https://img.shields.io/badge/version-3.0.0-059669)](https://github.com/imraywang/wewrite/blob/main/VERSION)
+[![Version](https://img.shields.io/badge/version-3.1.0-059669)](https://github.com/imraywang/wewrite/blob/main/VERSION)
 [![Skills](https://img.shields.io/badge/skills-1%20主入口%20%2B%209%20模块-8b5cf6)](#-模块速查)
 [![Themes](https://img.shields.io/badge/themes-16%20%2B%20learn--theme-f59e0b)](#-排版引擎)
 [![Agents](https://img.shields.io/badge/Claude%20Code%20·%20Codex%20·%20OpenClaw-supported-6366f1)](#-快速开始)
