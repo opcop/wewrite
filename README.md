@@ -39,7 +39,7 @@
 
 ## 👀 效果预览
 
-同一篇示例文章（[docs/demo-article.md](docs/demo-article.md)）× 6 个主题，`wewrite preview` 真实渲染长图（含 callout / timeline / quote / summary 组件与 AIGC 声明脚注）：
+同一篇示例文章（[docs/demo-article.md](docs/demo-article.md)）× 6 个主题，`wewrite preview` 真实渲染长图（含 label 小标签、steps 步骤卡、callout / timeline / quote / summary 组件与 AIGC 声明脚注）：
 
 <table>
 <tr>
