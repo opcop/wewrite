@@ -51,6 +51,7 @@ venv/
 docs/*
 !docs/screenshots/
 !docs/demo-article.md
+!docs/star-history.svg
 CLAUDE.md
 
 # IDE
