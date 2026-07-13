@@ -362,6 +362,10 @@ cd <仓库路径> && git pull && bash install.sh
 
 skill 每次运行会自动比对版本并提示。从 v2.1 及更早版本升级时，install.sh 会自动把仓库里的旧用户状态迁到 `~/.wewrite/`。
 
+## ⭐ Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=imraywang/wewrite&type=Date)](https://star-history.com/#imraywang/wewrite&Date)
+
 ## 🤝 贡献
 
 Issue / PR 欢迎。改 skill 内容请改 `skills/` 下的源文件（`dist/` 由 CI 自动重建）；跑 `python3 -m pytest tests/ -q` 与 `python3 scripts/context_budget.py --budget-tokens 15500` 保持绿灯。
