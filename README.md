@@ -73,6 +73,14 @@ cd ~/wewrite && bash install.sh
 
 `install.sh` 做三件事：装 `wewrite` CLI（uv/pipx，无则回退 venv）、把 10 个 skill 链接到 `~/.claude/skills/` 与 `~/.agents/skills/`（检测到 OpenClaw / Codex 时一并链接其 skills 目录）、把旧版用户状态迁到 `~/.wewrite/`。
 
+> **Windows 用户**：`install.sh` 是 bash 脚本，原生 cmd/PowerShell 跑不了。请改用同级提供的 **`install.ps1`**（原生 PowerShell，已做 Windows 适配——默认把 skills **复制**进 `~\.claude\skills` 等目录、避开原生软链权限坑；CLI 安装逻辑与 install.sh 一致）。在仓库目录执行：
+>
+> ```powershell
+> powershell -ExecutionPolicy Bypass -File install.ps1
+> ```
+>
+> 可选参数：`-UseSymlinks`（改用符号链接，需管理员/开发者模式）、`-SkillsOnly`（只复制 skills）、`-CliOnly`（只装 CLI）。环境变量 `CLAUDE_SKILLS_DIR` / `AGENTS_SKILLS_DIR` / `WORKBUDDY_SKILLS_DIR` 可精确指定目标目录。CLI 同样需 `uv tool install wewrite`（脚本会自动尝试）。
+
 ### 方式二：skills.sh 按需挑模块
 
 ```bash
@@ -115,6 +123,14 @@ for s in ~/wewrite/skills/wewrite*; do ln -sfn "$s" ~/.openclaw/skills/$(basenam
 ```bash
 hermes skills install imraywang/wewrite
 ```
+
+**WorkBuddy（CodeBuddy 系，folder-per-skill 原生兼容）**：`install.sh` 检测到 `~/.workbuddy` 时会自动把 10 个 skill 符号链接到 `~/.workbuddy/skills/`；也可显式指定目录：
+
+```bash
+WORKBUDDY_SKILLS_DIR=~/.workbuddy/skills bash install.sh
+```
+
+装好后 WeWrite 与 Claude Code / Codex 下行为完全一致——skill 都是通用 Markdown 指令 + `wewrite` CLI（确定性层），与具体 Agent 无关。CLI 同样需 `uv tool install wewrite`。
 
 各家均需 CLI 在 PATH：`uv tool install wewrite`。
 
