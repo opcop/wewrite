@@ -4,15 +4,18 @@
 # 已安装的包读打包时写入的 metadata，源码运行（PYTHONPATH=src）回退读 VERSION
 def _resolve_version() -> str:
     try:
+        from pathlib import Path
+        source_version = Path(__file__).resolve().parents[2] / "VERSION"
+        if source_version.exists():
+            return source_version.read_text().strip()
+    except Exception:
+        pass
+    try:
         from importlib.metadata import version
         return version("wewrite")
     except Exception:
         pass
-    try:
-        from pathlib import Path
-        return (Path(__file__).resolve().parents[2] / "VERSION").read_text().strip()
-    except Exception:
-        return "0.0.0+unknown"
+    return "0.0.0+unknown"
 
 
 __version__ = _resolve_version()

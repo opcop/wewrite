@@ -31,7 +31,6 @@ AUXILIARY = {
     "effect-review.md",    # 看看文章数据 (wewrite-stats)
     "multiplatform-rewrite.md",  # 多平台改写 (wewrite-rewrite)
     "style-template.md",   # only referenced inside onboard.md
-    "exemplar-seeds.yaml",  # fallback when exemplar library empty
     "pipeline-state.md",   # maintainer contract doc, not loaded at runtime
     "compliance-seo.md",   # orphan / dev-reference
     "cover-prompts.md",    # orphan / dev-reference
@@ -50,6 +49,10 @@ PIPELINE_SKILLS = [
 
 # Step 4.2 always loads exactly one persona; midnight-friend is the default.
 DEFAULT_PERSONA = "skills/wewrite-write/personas/midnight-friend.yaml"
+
+# The current first-run path no longer injects synthetic exemplars or a second
+# sentence-level checklist. All mandatory references are explicit in SKILL.md.
+DEFAULT_FIRST_RUN_REFS = []
 
 LOAD_RE = re.compile(r"读取:\s*\{(?:skill_dir|root)\}/(references/[\w./-]+\.(?:md|yaml))")
 
@@ -92,6 +95,12 @@ def measure(skill_dir: Path) -> dict:
     if persona.exists():
         l, c = _stats(persona)
         entries.append({"name": DEFAULT_PERSONA, "lines": l, "chars": c})
+    for rel in DEFAULT_FIRST_RUN_REFS:
+        path = skill_dir / rel
+        if path.exists() and path.resolve() not in seen_paths:
+            seen_paths.append(path.resolve())
+            l, c = _stats(path)
+            entries.append({"name": rel, "lines": l, "chars": c})
     total_lines = sum(e["lines"] for e in entries)
     total_chars = sum(e["chars"] for e in entries)
     return {
@@ -116,7 +125,7 @@ def main():
         for e in r["entries"]:
             print(f"{e['name']:<45}{e['lines']:>7}{e['chars']:>8}{round(e['chars']/3.5):>7}")
         print("-" * 67)
-        print(f"{'PEAK (normal run)':<45}{r['peak_lines']:>7}{r['peak_chars']:>8}{r['peak_tokens']:>7}")
+        print(f"{'STATIC FIRST-RUN DOCS':<45}{r['peak_lines']:>7}{r['peak_chars']:>8}{r['peak_tokens']:>7}")
     if args.budget_tokens is not None and r["peak_tokens"] > args.budget_tokens:
         print(f"\n✗ context budget exceeded: {r['peak_tokens']} > {args.budget_tokens}", file=sys.stderr)
         sys.exit(1)

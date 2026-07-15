@@ -34,6 +34,7 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path
 
 import requests
@@ -127,6 +128,67 @@ def _compress_image(raw_bytes: bytes, max_size: int) -> bytes:
             return buf.getvalue()
 
     return buf.getvalue()
+
+
+def _normalize_image(raw_bytes: bytes, output_path: str) -> bytes:
+    """Validate image bytes and encode them to match the output extension."""
+    from PIL import Image
+
+    try:
+        img = Image.open(BytesIO(raw_bytes))
+        img.load()
+    except Exception as exc:
+        raise ValueError("Provider returned invalid image data") from exc
+
+    suffix = Path(output_path).suffix.lower()
+    target_format = "PNG" if suffix == ".png" else "JPEG"
+    if target_format == "JPEG" and img.mode not in {"RGB", "L"}:
+        background = Image.new("RGB", img.size, "white")
+        if "A" in img.getbands():
+            background.paste(img, mask=img.getchannel("A"))
+        else:
+            background.paste(img.convert("RGB"))
+        img = background
+    buf = BytesIO()
+    if target_format == "PNG":
+        img.save(buf, format="PNG", optimize=True)
+    else:
+        img.save(buf, format="JPEG", quality=90, optimize=True)
+    return buf.getvalue()
+
+
+def _estimated_cost(config: dict, count: int) -> float:
+    img_cfg = config.get("image", {})
+    value = img_cfg.get("estimated_cost_per_image", 0)
+    try:
+        return max(0.0, float(value)) * count
+    except (TypeError, ValueError):
+        raise ValueError("image.estimated_cost_per_image must be a number")
+
+
+def _apply_provider_override(config: dict, provider: str | None) -> dict:
+    """Return a copied config restricted to the explicitly selected provider."""
+    if not provider:
+        return config
+    if provider not in PROVIDERS:
+        raise ValueError(f"Unknown provider: {provider}")
+    copied = dict(config)
+    image_cfg = dict(config.get("image", {}))
+    entries = image_cfg.get("providers")
+    if isinstance(entries, list):
+        matched = [dict(item) for item in entries if item.get("provider") == provider]
+        if not matched:
+            raise ValueError(f"Provider '{provider}' is not configured")
+        image_cfg["providers"] = matched
+    else:
+        configured = image_cfg.get("provider")
+        if configured and configured != provider:
+            raise ValueError(
+                f"Provider '{provider}' is not configured; current provider is '{configured}'"
+            )
+        image_cfg["provider"] = provider
+    copied["image"] = image_cfg
+    return copied
 
 
 def _size_to_aspect(size: str) -> str:
@@ -861,6 +923,8 @@ def generate_image(
         if raw_bytes is None:
             continue  # this provider failed all attempts, try the next one
 
+        raw_bytes = _normalize_image(raw_bytes, output_path)
+
         # Compress if over 5MB (WeChat upload limit)
         if len(raw_bytes) > MAX_FILE_SIZE:
             raw_bytes = _compress_image(raw_bytes, MAX_FILE_SIZE)
@@ -875,7 +939,7 @@ def generate_image(
     )
 
 
-def generate_batch(items, config=None, max_workers=4):
+def generate_batch(items, config=None, max_workers=4, max_images=None, max_cost=None):
     """并发生成多张图，每张仍独立走多 provider fallback。
 
     把"并行"放进工具里（而非依赖编排模型一轮内发多个工具调用——实测模型做不到），
@@ -886,6 +950,15 @@ def generate_batch(items, config=None, max_workers=4):
     """
     if config is None:
         config = _load_config()
+    if not isinstance(items, list):
+        raise ValueError("manifest must contain a JSON list")
+    if max_images is not None and len(items) > max_images:
+        raise ValueError(f"Image count {len(items)} exceeds limit {max_images}")
+    estimated = _estimated_cost(config, len(items))
+    if max_cost is not None and estimated > max_cost:
+        raise ValueError(
+            f"Estimated image cost {estimated:.2f} exceeds limit {max_cost:.2f}"
+        )
     results = [None] * len(items)
 
     def _one(idx, it):
@@ -916,17 +989,23 @@ def main():
                     help=f"Override provider ({', '.join(PROVIDERS)})")
     ap.add_argument("--manifest",
                     help="JSON 文件 [{prompt,output,size}]：一次并发生成多张（推荐用于配图批量）")
+    ap.add_argument("--max-images", type=int, help="本次最多生成多少张")
+    ap.add_argument("--max-cost", type=float, help="本次允许的预估费用上限")
     args = ap.parse_args()
 
     try:
         config = _load_config()
-        if args.provider:
-            config.setdefault("image", {})["provider"] = args.provider
+        config = _apply_provider_override(config, args.provider)
 
         if args.manifest:
             with open(args.manifest, encoding="utf-8") as f:
                 items = json.load(f)
-            results = generate_batch(items, config=config)
+            results = generate_batch(
+                items,
+                config=config,
+                max_images=args.max_images,
+                max_cost=args.max_cost,
+            )
             ok = sum(1 for r in results if r["ok"])
             print(json.dumps({"batch": True, "total": len(results), "ok": ok,
                               "failed": len(results) - ok, "results": results},

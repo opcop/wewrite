@@ -6,11 +6,11 @@
 agent 的上下文（编排成本的大头是逐轮重发的滚雪球上下文）。
 
 用法（编排 agent 通过 Bash 调用）：
-    wewrite llm-write --brief output/_brief.md --output output/article.md
-    wewrite llm-write --brief output/_brief.md --output output/xiaohongshu.md --system-extra "小红书口吻…"
+    wewrite llm-write --brief runs/<run_id>/brief.md --output runs/<run_id>/article.md
+    wewrite llm-write --brief runs/<run_id>/brief.md --output runs/<run_id>/xiaohongshu.md --system-extra "小红书口吻…"
 
 brief 文件由编排 agent 写好：选题 / 框架 / **真实素材锚点** / 人格 / 目标字数 / （重写时的）定向修改指令。
-反 AI 写作铁律由本工具的 system prompt 注入（与 references/writing-guide.md 对齐的浓缩版）。
+编辑质量底线由本工具的 system prompt 注入，并与 skill 的编辑质量标准保持一致。
 
 退出码（供 SKILL.md 分支降级）：
     0 成功；3 未配置写作模型（→ 降级为 agent 自写）；4 调用失败（→ 降级或重试）。
@@ -30,25 +30,14 @@ import json
 import os
 import sys
 
-# 反 AI 写作铁律：规范化的单一真源在 references/anti-ai-writing-system.md（与 SKILL.md 内联自写路径
-# 共用，避免分叉）。本文件运行时优先读那个；读不到才用下面的内嵌兜底（保证脱离仓库也能独立运行）。
-# 事实准确性由编排 agent 在 brief 里给真实锚点 + Tier-3 终检兜底。
-_ANTI_AI_FALLBACK = """你是资深中文公众号作者，文风口语、有观点、像真人在聊天。严格遵守反 AI 检测写作铁律：
-1) 句子长短强烈交替——长句后紧跟三五字短句；绝不让句长趋于一致。
-2) 段落长短交替，别每段都四五行整整齐齐。
-3) 杜绝 AI 腔高频词（值得注意的是 / 综上所述 / 赋能 / 助力 / 在当今 / 随着…的发展 / 不仅…而且 / 总而言之），用大白话。
-4) 只用 brief 里给出的真实数据、案例、工具名、价格、数字；**不要编造任何事实或数字**，宁可不写也别瞎编。
-5) 情绪有起伏，有吐槽、有转折、有「说句实在的」「讲真」这类口语插入。
-6) 少用副词（非常 / 极其 / 十分）。
-7) 适度口语化断句与自我修正（——当然也不全是、我一开始也以为…后来发现…）。
-8) 别堆整齐小标题罗列，像人在唠。"""
+_ANTI_AI_FALLBACK = """你是资深中文公众号编辑。只使用 brief 提供的事实、数据、案例和个人经历，绝不补写未提供的亲历、数字、引述或身份。明确区分事实、推断和个人意见。文章要有清楚的核心判断、对读者有用的具体内容，并符合 brief 给出的账号声音。语言直接自然，删除套话、重复和无效标题；不要为了显得像人而刻意制造碎句、负面情绪、网络黑话或离题段落。"""
 
 # API 模式专属的输出格式约束（内联自写不需要——它走 Write 工具直接落 markdown 文件）。
 _OUTPUT_FORMAT = "\n\n只输出正文（含一个口语化标题），不要任何前后说明，不要用代码块包裹。"
 
 
 def _anti_ai_system() -> str:
-    """读规范化的反 AI 写作契约（references/anti-ai-writing-system.md）；读不到用内嵌兜底。"""
+    """Load the packaged editorial contract, with a safe fallback."""
     pkg_data = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             "..", "data", "anti-ai-writing-system.md")
     try:
@@ -108,7 +97,7 @@ def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description="混合路由写作工具（DeepSeek 等写作模型出稿）")
     ap.add_argument("--brief", required=True, help="brief 文件路径（编排 agent 写好）")
     ap.add_argument("--output", required=True, help="正文输出文件路径")
-    ap.add_argument("--system-extra", default="", help="追加到反 AI system prompt 后的额外约束（如平台口吻）")
+    ap.add_argument("--system-extra", default="", help="追加编辑要求（如平台口吻）")
     args = ap.parse_args(argv)
 
     cfg = _load_config()

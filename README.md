@@ -98,7 +98,9 @@ skill 目录自包含、复制即用；CLI 另装一条：`uv tool install wewri
 装好后直接开聊：
 
 ```
-你：写一篇公众号文章                → 全流程（默认全自动）
+你：写一篇公众号文章                → 审过的本地成稿（默认不生图、不发布）
+你：完整制作一篇公众号文章          → 成稿 + 配图 + 本地预览
+你：推到公众号草稿箱                → 明确授权后才发布
 你：今天写什么                      → 只要选题
 你：检查一下                        → 生成档案 + 质量自检
 你：改写成小红书                    → 多平台改写
@@ -142,11 +144,12 @@ WORKBUDDY_SKILLS_DIR=~/.workbuddy/skills bash install.sh
 cp config.example.yaml ~/.wewrite/config.yaml
 ```
 
-填入微信公众号 `appid`/`secret`（推送需要）和图片 API key（生图需要）。**不配也能用**——自动降级为本地 HTML + 输出图片提示词。配了 `WEWRITE_WRITER_API_KEY` 则正文出稿路由给写作模型（DeepSeek，约 $0.04/篇）。
+填入微信公众号 `appid`/`secret`（推送需要）和图片 API key（生图需要）。**不配也能用**——自动降级为本地 HTML + 输出图片提示词。配了 `WEWRITE_WRITER_API_KEY` 则正文可交给独立写作模型；实际费用以你使用的服务为准。
 
 ## 🧩 模块速查
 
-管道的每一段都是独立 skill，缺前置会自己补齐（或向你要）；状态经 `~/.wewrite/output/_state.yaml` 传递——上午选完题，下午在新会话里说"就写这个"也能接上。
+管道的每一段都是独立 skill。每篇文章保存在 `~/.wewrite/runs/<任务编号>/`，进度可恢复，
+多篇同时进行也不会互相覆盖。上午选完题，下午说“继续上次”就能接上。
 
 | 你说 | 激活 | 产出 |
 |------|------|------|
@@ -166,7 +169,7 @@ cp config.example.yaml ~/.wewrite/config.yaml
 
 | 层 | 位置 | 内容 |
 |----|------|------|
-| Prompt | `skills/`（10 个自包含 skill） | 选题好不好、像不像人写的、哪里要改——方法论与判断，每个 skill 自带 references/ |
+| Prompt | `skills/`（10 个自包含 skill） | 选题、事实、观点、实用性和表达判断，每个 skill 自带 references/ |
 | Runtime | `wewrite` CLI（pip 包） | 打分、转 HTML、调微信 API、生图、成本路由——确定性操作 |
 | State | `~/.wewrite/`（`WEWRITE_HOME` 可覆盖） | 凭证、风格、历史、学习产物、输出文件——全部在仓库外 |
 
@@ -177,16 +180,16 @@ skill 目录复制到哪都能用；CLI 与 skill 独立安装升级；换机器
 | 能力 | 说明 | 所在 |
 |------|------|------|
 | 热点抓取 | 微博 + 头条 + 百度实时热搜 | `wewrite hotspots` |
-| 爆款参考 | 搜狗微信搜索垂类近期文章，同题密度识别已验证需求 | `wewrite search-articles` |
+| 高频需求 | 搜狗微信搜索垂类近期文章，用同题密度观察内容需求，不虚构阅读量 | `wewrite search-articles` |
 | SEO 评分 | 百度 + 360 搜索量化评分 | `wewrite seo` |
 | 选题生成 | 10 选题 × 3 维度评分 + 历史去重 | wewrite-topic |
-| 素材采集 | WebSearch 真实数据/引述/案例，禁止编造 | wewrite-write |
+| 素材采集 | WebSearch 核对数据/引述/案例，并为每篇文章保存来源账本 | wewrite-write / `wewrite sources` |
 | 框架生成 | 7 套写作骨架（痛点/故事/清单/对比/热点解读/纯观点/复盘） | wewrite-write |
 | 内容增强 | 按框架类型自动匹配：角度发现/密度强化/细节锚定/真实体感 | wewrite-write |
-| 拟人写作 | 写作契约（句长交替/情绪起伏/口语修正）+ 维度随机化 + 分段实时自检 | wewrite-write |
-| 质量评分 | 11 项统计检测（句长方差/词汇丰富度/情绪起伏…），0-1 连续分 | `wewrite score` |
+| 编辑写作 | 准确、观点、有用、合声、好读五项标准 + 用户风格学习 | wewrite-write |
+| 风险提示 | 11 项机械检查，定位套话、碎句、重复节奏等；不判断作者身份 | `wewrite score` |
 | SEO 优化 | 标题策略 / 摘要 / 关键词 / 标签 | wewrite-review |
-| 视觉 AI | 封面 3 创意 + 内文 3-6 配图，风格锚定全文一致 | `wewrite image-gen` |
+| 视觉 AI | 按任务设置生成封面/必要配图，生成前检查数量和预估费用 | `wewrite image-gen` |
 | 排版发布 | 16+ 主题 + 微信兼容修复 + 暗黑模式 | `wewrite preview/publish` |
 | 多平台改写 | 一稿 → 小红书/抖音，内容级真改 + 原创度门 | wewrite-rewrite |
 | 效果复盘 | 微信数据分析 API 回填阅读数据，反哺选题 | `wewrite stats` |
@@ -217,13 +220,13 @@ writing_persona: "midnight-friend"
 
 ## 📝 内容质量
 
-WeWrite 的目标不是"骗过 AI 检测"，而是**写出值得读的文章**。核心机制：
+WeWrite 的目标是**写出准确、有观点、对读者有用的文章**。核心机制：
 
 1. **内容增强**：根据框架类型自动执行不同策略——热点文找反直觉角度、干货文强化信息密度、故事文锚定真实细节、对比文注入真实用户体感
-2. **素材采集**：自动 WebSearch 真实数据/引述/案例，锚定在文章中（不编造）
+2. **素材采集**：搜索并核对真实数据/引述/案例，每篇文章保存独立来源账本（不编造）
 3. **范文风格库**：导入你已发布的文章，写作时自动注入你的风格指纹（句长节奏、情绪表达、转折方式）
 4. **学习飞轮**：每次你编辑后说"学习我的修改"，下次初稿更接近你的风格
-5. **文章自检**：说"检查一下"，查看生成档案（用了什么框架/人格/策略）+ 质量检查（具体到哪句话该怎么改）
+5. **文章自检**：按准确、观点、有用、合声、好读审稿；工具分数只提示机械语言风险
 
 ## 🎨 排版引擎
 
@@ -302,6 +305,8 @@ wewrite fetch-article <url> -o out.md               # 公众号文章 → Markdo
 wewrite learn-theme <url> --name my-style           # 学排版主题
 wewrite validate article.html                       # 微信兼容性校验
 wewrite diagnose                                    # 环境 + 配置自检
+wewrite run start/list/resume/show/finish           # 独立文章任务与恢复
+wewrite sources add/list                            # 保存和查看事实来源
 wewrite home                                        # 查看状态目录
 wewrite migrate --from <旧仓库路径>                  # 从 v2.1 及更早版本迁移状态
 ```
@@ -311,22 +316,23 @@ wewrite migrate --from <旧仓库路径>                  # 从 v2.1 及更早�
 ```
 Step 1  环境检查 + 加载风格（不存在则 Onboard）        ← 主入口 wewrite
   ↓
-Step 2  热点 + 爆款参考 → 历史去重 + SEO → 选题        ← wewrite-topic
+Step 2  热点 + 高频需求 → 历史去重 + 搜索需求 → 选题    ← wewrite-topic
   ↓
 Step 3  框架选择 → 素材采集（WebSearch 真实数据）      ┐
   ↓                                                    ├ wewrite-write
-Step 4  维度随机化 → 范文注入 → 写作 → 快速自检        ┘
+Step 4  用户风格 → 写作 → 编辑自检                    ┘
   ↓
 Step 5  SEO 优化 → 质量验证                            ← wewrite-review
   ↓
 Step 6  视觉 AI（封面 + 内文配图）                     ← wewrite-visual
   ↓
-Step 7  预检 + 排版 + 发布（16 主题 + 微信兼容修复）   ← wewrite-publish
+Step 7  预检 + 排版；仅明确授权后发布                  ← wewrite-publish
   ↓
 Step 8  写入历史 → 回复用户（含飞轮提示）              ← 主入口 wewrite
 ```
 
-默认全自动，主入口按序编排各模块，状态经 `~/.wewrite/output/_state.yaml` 传递（契约见 [`skills/wewrite/references/pipeline-state.md`](https://github.com/imraywang/wewrite/blob/main/skills/wewrite/references/pipeline-state.md)）。
+默认连续执行，但“写一篇”只交付本地成稿；“完整制作”才配图，“推到草稿箱”才发布。每篇文章
+使用独立任务目录并可恢复（契约见 [`skills/wewrite/references/pipeline-state.md`](https://github.com/imraywang/wewrite/blob/main/skills/wewrite/references/pipeline-state.md)）。
 
 <details>
 <summary><b>📁 目录结构</b></summary>
@@ -337,9 +343,9 @@ wewrite/
 │   ├── wewrite/                # 主入口：路由 + 全流程编排（Step 1/8 内联，Step 2-7 调模块）
 │   ├── wewrite-style/          # 风格设置 / Onboard（onboard.md、style-template.md、style.example.yaml）
 │   ├── wewrite-topic/          # 选题（topic-selection.md）
-│   ├── wewrite-write/          # 框架 + 素材 + 写作（writing-guide、frameworks、personas/ 7 人格…）
+│   ├── wewrite-write/          # 框架 + 来源账本 + 写作（编辑质量标准、personas/ 7 人格…）
 │   ├── wewrite-review/         # SEO + 编辑自评 + 质量评分 + 自检报告（seo-rules.md）
-│   ├── wewrite-visual/         # 封面 + 内文配图（visual-prompts.md、cover-prompts.md）
+│   ├── wewrite-visual/         # 封面 + 必要配图（数量与费用上限）
 │   ├── wewrite-publish/        # 排版 + 发布 + 主题画廊 + 小绿书（wechat-constraints.md）
 │   ├── wewrite-learn/          # 学习修改 / 导入范文 / 学排版（learn-edits.md）
 │   ├── wewrite-stats/          # 文章数据复盘（effect-review.md）

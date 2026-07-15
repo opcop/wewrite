@@ -31,8 +31,9 @@ from pathlib import Path
 
 import yaml
 
+from ..history import load_history
 from ..paths import (config_path as _config_path, history_path as _history_path,
-                     output_dir as _output_dir, lessons_dir as _lessons_dir, home as _home)
+                     lessons_dir as _lessons_dir, home as _home)
 
 # Pattern types with descriptions
 PATTERN_TYPES = {
@@ -95,8 +96,7 @@ def fetch_wechat_draft() -> tuple[str, str, str]:
     if not history_path.exists():
         raise FileNotFoundError("history.yaml not found — no articles to compare")
 
-    with open(history_path) as f:
-        history = yaml.safe_load(f) or []
+    history = load_history(history_path)["articles"]
 
     # Find most recent article with media_id
     latest = None
@@ -111,39 +111,18 @@ def fetch_wechat_draft() -> tuple[str, str, str]:
     media_id = latest["media_id"]
     title = latest.get("title", "")
 
-    # Find the local draft file
-    # Priority: output_file field → title slug match → largest file
-    date = latest.get("date", "")
-    output_dir = _output_dir()
-    draft_path = None
-
-    # First try: exact path from history
+    # Use the immutable, exact article path recorded for this published run.
     output_file = latest.get("output_file", "")
+    draft_path = None
     if output_file:
         candidate = _home() / output_file if not Path(output_file).is_absolute() else Path(output_file)
         if candidate.exists():
             draft_path = candidate
 
-    if not draft_path and date:
-        candidates = sorted(output_dir.glob(f"{date}-*.md"))
-        if len(candidates) == 1:
-            draft_path = candidates[0]
-        elif len(candidates) > 1:
-            # Multiple files on same date — try to match by title keywords
-            title_lower = title.lower()
-            for c in candidates:
-                slug = c.stem.replace(date + "-", "").replace("-", " ")
-                # Check if slug words appear in title
-                if any(w in title_lower for w in slug.split() if len(w) > 1):
-                    draft_path = c
-                    break
-            if not draft_path:
-                # Fallback: use the largest file (likely the final version)
-                draft_path = max(candidates, key=lambda p: p.stat().st_size)
-
     if not draft_path or not draft_path.exists():
         raise FileNotFoundError(
-            f"Cannot find local draft for '{title}' (date={date}) in output/"
+            f"Cannot find the exact local draft for '{title}'. "
+            "Choose it explicitly with --draft instead of guessing by filename."
         )
 
     # Get access token and fetch draft from WeChat
@@ -462,27 +441,26 @@ def main():
     # Auto-grow exemplar library from edited finals
     final_title = extract_title(final)
     try:
-        import extract_exemplar
+        from . import extract_exemplar
         exemplar = extract_exemplar.extract_exemplar(final, source=final_title or "user-edited")
-        if exemplar["humanness_score"] <= 50:
+        if exemplar["quality_score"] >= 50:
             exemplar_path = extract_exemplar.save_exemplar(exemplar)
             print(f"\n✓ 终稿已加入范文库: {exemplar_path}")
-            print(f"  Score: {exemplar['humanness_score']:.1f}/100, Category: {exemplar['category']}")
+            print(f"  Quality: {exemplar['quality_score']:.1f}/100, Category: {exemplar['category']}")
         else:
-            print(f"\n⚠ 终稿 humanness_score={exemplar['humanness_score']:.1f} > 50，未加入范文库")
+            print(f"\n⚠ 终稿机械语言风险较高，先复审后再加入范文库")
     except Exception as e:
         print(f"\n⚠ 范文提取跳过: {e}")
 
     lesson_count = len(load_all_lessons())
     print(f"Total lessons: {lesson_count}")
 
-    if lesson_count >= 5 and lesson_count % 5 == 0:
-        print(f"\n{'=' * 60}")
-        print("PLAYBOOK UPDATE TRIGGERED")
-        print(f"{'=' * 60}")
-        print(f"{lesson_count} lessons. Agent should run:")
-        print(f"  wewrite learn-edits --summarize --json")
-        print(f"Then update playbook.md with high-confidence patterns.")
+    print(f"\n{'=' * 60}")
+    print("PLAYBOOK UPDATE REQUIRED")
+    print(f"{'=' * 60}")
+    print(f"{lesson_count} lesson(s). After filling this lesson's patterns, run:")
+    print("  wewrite learn-edits --summarize --json")
+    print("Then update playbook.md so this edit affects the next article.")
 
     # Instructions for Agent
     print(f"""

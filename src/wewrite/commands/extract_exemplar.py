@@ -200,7 +200,7 @@ def extract_exemplar(text, category=None, source=None):
         "title": title,
         "source": source or title,
         "category": category,
-        "humanness_score": score_result["composite_score"],
+        "quality_score": score_result["quality_score"],
         "fingerprint": {
             "sentence_stddev": sentence_stddev,
             "vocab_temperature": compute_vocab_temperature(clean),
@@ -240,7 +240,7 @@ def save_exemplar(exemplar):
     frontmatter = {
         "source": exemplar["source"],
         "category": category,
-        "humanness_score": exemplar["humanness_score"],
+        "quality_score": exemplar["quality_score"],
         "sentence_stddev": fp["sentence_stddev"],
         "vocab_temperature": fp["vocab_temperature"],
         "negative_ratio": fp["negative_ratio"],
@@ -279,12 +279,12 @@ def _update_index(filename, exemplar):
         "file": filename,
         "source": exemplar["source"],
         "category": exemplar["category"],
-        "humanness_score": exemplar["humanness_score"],
+        "quality_score": exemplar["quality_score"],
         "extracted_at": exemplar["extracted_at"],
     }
     index = [e for e in index if e.get("file") != filename]
     index.append(entry)
-    index.sort(key=lambda x: (x["category"], x["humanness_score"]))
+    index.sort(key=lambda x: (x["category"], -_entry_quality(x)))
 
     with open(INDEX_FILE, "w", encoding="utf-8") as f:
         yaml.dump(index, f, allow_unicode=True, default_flow_style=False)
@@ -318,9 +318,16 @@ def list_exemplars():
     for cat, entries in sorted(by_cat.items()):
         print(f"\n  [{cat}] ({len(entries)} 篇)")
         for e in entries:
-            score = e["humanness_score"]
-            bar = "█" * int((100 - score) / 10) + "░" * (10 - int((100 - score) / 10))
+            score = _entry_quality(e)
+            bar = "█" * int(score / 10) + "░" * (10 - int(score / 10))
             print(f"    {bar} {score:5.1f}  {e['source'][:40]}")
+
+
+def _entry_quality(entry):
+    """Read canonical quality score or convert a pre-v4 risk score."""
+    if "quality_score" in entry:
+        return float(entry["quality_score"])
+    return 100.0 - float(entry.get("humanness_score", 50))
 
 
 def main():
@@ -357,7 +364,7 @@ def main():
         else:
             print(f"✓ {path.name}")
             print(f"  Category:  {exemplar['category']}")
-            print(f"  Score:     {exemplar['humanness_score']:.1f}/100")
+            print(f"  Quality:   {exemplar['quality_score']:.1f}/100")
             print(f"  Segments:  {sum(1 for v in exemplar['segments'].values() if v)}/4")
             fp = exemplar["fingerprint"]
             print(f"  Stddev:    {fp['sentence_stddev']}")

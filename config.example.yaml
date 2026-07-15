@@ -8,7 +8,7 @@ wechat:
   author: ""  # 默认署名（可选）
 
 # AI 图片生成
-# 支持 9 个 provider，配一个就能用，配多个自动 fallback。
+# 支持 10 个 provider，配一个就能用，配多个自动 fallback。
 #
 # ┌─────────────────┬────────────────────────────────────────────────┬────────────────────┐
 # │ Provider        │ 获取 API Key                                   │ 特点               │
@@ -22,6 +22,7 @@ wechat:
 # │ gemini          │ https://aistudio.google.com/apikey             │ 免费额度较多       │
 # │ openrouter      │ https://openrouter.ai/settings/keys            │ 多模型代理         │
 # │ replicate       │ https://replicate.com/account/api-tokens       │ 开源模型丰富       │
+# │ sub2api          │ 自建 Sub2API 服务                              │ OpenAI 兼容聚合层  │
 # └─────────────────┴────────────────────────────────────────────────┴────────────────────┘
 #
 # 支持两种配置方式：
@@ -30,12 +31,14 @@ wechat:
 image:
   provider: "doubao"           # 见上表 Provider 列
   api_key: "your_api_key"
+  estimated_cost_per_image: 0.04  # 用于预算预检；按你的实际价格修改
   # model: "doubao-seedream-5-0-260128"   # 可选，各 provider 有默认值
   # base_url: "https://ark.cn-beijing.volces.com/api/v3"  # 可选
 
 # 方式二：多 provider 自动 fallback（推荐）
 # 按顺序尝试，第一个失败自动切换下一个，不需要全部填写
 # image:
+#   estimated_cost_per_image: 0.04  # 用于预算预检；按你的实际价格修改
 #   providers:
 #     - provider: doubao
 #       api_key: "your_volcengine_key"

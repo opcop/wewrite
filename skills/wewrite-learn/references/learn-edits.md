@@ -2,13 +2,14 @@
 
 这是 WeWrite 最重要的长期价值。每次用户编辑文章后让系统学习，下一次的初稿就会更接近用户的风格，需要的编辑量越来越少。
 
-**飞轮效应**：初稿需要改 30% → 学习 5 次后只需改 15% → 学习 20 次后只需改 5%
+**预期效果**：反复出现的真实修改会逐步成为稳定规则，减少下一次重复修改；不承诺固定次数或比例。
 
 **触发**：用户说"我改了，学习一下"、"学习我的修改"
 
 ## 1. 获取 draft 和 final
 
-- **draft**：`{home}/output/` 下最新的 .md 文件（按修改时间排序，用 `ls -t $(wewrite home)/output/*.md | head -1`）
+- **draft**：优先使用用户点名的原稿；否则从 `history.yaml` 对应文章的 `output_file` 取精确路径。
+  若有多个候选，必须让用户确认，不能用“最新修改的 .md”猜测。
 - **final**：用户提供修改后的版本。主动引导用户："请把你改好的文章全文粘贴给我，或者告诉我文件路径。如果你是在微信后台编辑器里改的，可以全选复制后直接粘贴到这里。"
 
 ## 2. 运行 diff 分析
@@ -33,7 +34,7 @@ wewrite learn-edits --draft {draft_path} --final {final_path}
 
 ## 4. Playbook 更新
 
-每积累 5 次 lessons，触发 playbook 更新：
+每次完成 pattern 分析后立即更新 playbook，保证这次学习会影响下一篇：
 
 ```bash
 wewrite learn-edits --summarize --json
@@ -79,8 +80,8 @@ rules:
 Step 4 写作时读取 playbook.md：
 
 - **confidence ≥ 5 的规则**：作为硬性约束执行（和 persona 同级）
-- **confidence 3-5 的规则**：作为软性参考（倾向遵循但不强制）
-- **confidence < 3 的规则**：忽略（可能已过时）
+- **confidence 2-5 的规则**：作为软性参考（倾向遵循但不强制）
+- **confidence < 2 的规则**：删除（可能已过时）
 
 这确保：
 - 用户反复确认的偏好（高 confidence）被严格执行

@@ -34,3 +34,7 @@ def test_measure_reports_peak_on_real_repo():
     assert r["peak_tokens"] > 0
     assert any(e["name"] == "skills/wewrite/SKILL.md" for e in r["entries"])
     assert any(e["name"] == "skills/wewrite-write/SKILL.md" for e in r["entries"])
+    assert any(e["name"].endswith("editorial-quality.md") for e in r["entries"])
+    assert any(e["name"].endswith("frameworks-quick.md") for e in r["entries"])
+    assert not any(e["name"].endswith("writing-guide.md") for e in r["entries"])
+    assert r["peak_tokens"] < 8000

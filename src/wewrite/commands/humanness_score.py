@@ -1,20 +1,9 @@
 #!/usr/bin/env python3
-"""
-Humanness scoring for WeWrite articles.
+"""Heuristic style-risk checks for WeWrite articles.
 
-Three-tier evaluation aligned with writing-guide.md's anti-AI checklist:
-
-  Tier 1 (Statistical, 50%): 6 checks measuring statistical properties
-         that AI detectors analyze (burstiness, distribution, variance).
-  Tier 2 (Pattern, 30%):     5 checks for specific linguistic patterns
-         (banned words, broken sentences, real sources).
-  Tier 3 (LLM, 20%):        Semantic analysis done by the agent in SKILL.md
-         (style drift, density waves, coherence). Passed via --tier3 flag.
-
-Each check outputs a continuous 0-1 score and maps to a writing-config
-parameter, so the optimization loop knows which knob to turn.
-
-Standalone mode (no --tier3): weights redistribute to T1=62.5%, T2=37.5%.
+The command catches mechanical issues such as repetitive sentence shapes,
+cliches, excessive adverbs, fragments, and weak source attribution. It does
+not determine whether a text is human-written and it cannot verify facts.
 
 Usage:
     wewrite score article.md                    # single score
@@ -192,35 +181,26 @@ def score_paragraph_length_variance(text):
 
 
 def score_vocabulary_richness(text):
-    """[1.2] CJK bigram type-token ratio + temperature mix. → word_temperature_bias"""
+    """CJK bigram diversity without rewarding arbitrary slang mixtures."""
     cjk_chars = re.findall(r'[\u4e00-\u9fff]', text)
     if len(cjk_chars) < 20:
         return _make_result(0.5, "too few CJK characters", "word_temperature_bias")
     bigrams = [cjk_chars[i] + cjk_chars[i + 1] for i in range(len(cjk_chars) - 1)]
     ttr = len(set(bigrams)) / len(bigrams) if bigrams else 0
     ttr_score = min(1.0, ttr / 0.7)
-    # Temperature mix bonus
-    found_temps = sum([
-        any(w in text for w in COLD_WORDS),
-        any(w in text for w in WARM_WORDS),
-        any(w in text for w in HOT_WORDS),
-        any(w in text for w in WILD_WORDS),
-    ])
-    temp_bonus = found_temps / 4.0 * 0.3
-    score = min(1.0, ttr_score * 0.7 + temp_bonus)
-    return _make_result(score, f"bigram_ttr={ttr:.3f}, temps={found_temps}/4", "word_temperature_bias")
+    return _make_result(ttr_score, f"bigram_ttr={ttr:.3f}", "vocabulary_diversity")
 
 
-def score_negative_emotion_ratio(text):
-    """[1.4] Negative emotion ratio. → emotional_arc"""
+def score_emotional_balance(text):
+    """Do not require negativity; only flag an article dominated by it."""
     sentences = _split_sentences(text)
     if not sentences:
         return _make_result(0.5, "no sentences", "emotional_arc")
     negative_count = sum(1 for s in sentences
                          if any(m in s for m in NEGATIVE_MARKERS))
     ratio = negative_count / len(sentences)
-    score = min(1.0, ratio / 0.25)
-    return _make_result(score, f"negative={negative_count}/{len(sentences)} ({ratio:.0%}, target ≥20%)", "emotional_arc")
+    score = 1.0 if ratio <= 0.35 else max(0.0, 1.0 - (ratio - 0.35) * 2)
+    return _make_result(score, f"negative markers={negative_count}/{len(sentences)} ({ratio:.0%})", "emotional_balance")
 
 
 def score_adverb_density(text):
@@ -258,8 +238,8 @@ def score_banned_words(text):
     return _make_result(score, detail, None)
 
 
-def score_broken_sentences(text):
-    """[2.2] Broken/incomplete sentence patterns. → broken_sentence_rate"""
+def score_sentence_integrity(text):
+    """Penalize excessive fragments instead of requiring them."""
     count = 0
     lines = text.split('\n')
     for line in lines:
@@ -271,39 +251,40 @@ def score_broken_sentences(text):
         if 1 <= len(line) <= 10 and not line.startswith('#'):
             count += 1
     char_count = len(text)
-    expected = max(3, char_count / 500 * 3)
-    score = min(1.0, count / expected)
-    return _make_result(score, f"{count} broken structures (expected ≥{expected:.0f})", "broken_sentence_rate")
+    allowed = max(1, char_count / 1000)
+    score = max(0.0, 1.0 - max(0, count - allowed) / max(3, allowed * 3))
+    return _make_result(score, f"{count} possible fragments (soft allowance {allowed:.1f})", "sentence_integrity")
 
 
 def score_real_sources(text):
-    """[3.1] Real external source indicators. → real_data_density"""
+    """Check attribution signals only; this does not verify source truth."""
     count = 0
     for pattern in REAL_SOURCE_PATTERNS:
         count += len(re.findall(pattern, text))
     score = min(1.0, count / 5.0)
-    return _make_result(score, f"{count} real-source indicators (target ≥5)", "real_data_density")
+    return _make_result(score, f"{count} source-attribution signals (not fact verification)", "source_attribution")
 
 
-def score_word_temperature_mix(text):
-    """[1.2] Word temperature band coverage. → word_temperature_bias"""
-    found_temps = sum([
-        any(w in text for w in COLD_WORDS),
-        any(w in text for w in WARM_WORDS),
-        any(w in text for w in HOT_WORDS),
-        any(w in text for w in WILD_WORDS),
-    ])
-    score = max(0.0, (found_temps - 1) / 3.0)
-    return _make_result(score, f"{found_temps}/4 temperature bands", "word_temperature_bias")
+def score_register_consistency(text):
+    """Flag uncontrolled mixing of jargon, chatty fillers, and internet slang."""
+    bands = [
+        sum(text.count(w) for w in COLD_WORDS),
+        sum(text.count(w) for w in WARM_WORDS),
+        sum(text.count(w) for w in HOT_WORDS),
+        sum(text.count(w) for w in WILD_WORDS),
+    ]
+    active = sum(1 for count in bands if count >= 3)
+    score = 1.0 if active <= 2 else max(0.4, 1.0 - (active - 2) * 0.3)
+    return _make_result(score, f"heavily used vocabulary bands={active}/4", "register_consistency")
 
 
-def score_self_correction(text):
-    """[2.2] Self-correction and parenthetical patterns. → self_correction_rate"""
+def score_insertion_control(text):
+    """Allow natural insertions but penalize repeated scripted self-correction."""
     count = 0
     for pattern in SELF_CORRECTION_PATTERNS:
         count += len(re.findall(pattern, text))
-    score = min(1.0, count / 3.0)
-    return _make_result(score, f"{count} self-corrections/insertions (target ≥3)", "self_correction_rate")
+    score = 1.0 if count <= 3 else max(0.0, 1.0 - (count - 3) / 8)
+    return _make_result(score, f"{count} self-corrections/insertions", "insertion_control")
 
 
 # ============================================================
@@ -315,16 +296,16 @@ TIER1_CHECKS = [
     ("sentence_length_range", score_sentence_length_range),
     ("paragraph_length_variance", score_paragraph_length_variance),
     ("vocabulary_richness", score_vocabulary_richness),
-    ("negative_emotion_ratio", score_negative_emotion_ratio),
+    ("emotional_balance", score_emotional_balance),
     ("adverb_density", score_adverb_density),
 ]
 
 TIER2_CHECKS = [
     ("banned_words", score_banned_words),
-    ("broken_sentences", score_broken_sentences),
+    ("sentence_integrity", score_sentence_integrity),
     ("real_sources", score_real_sources),
-    ("word_temperature_mix", score_word_temperature_mix),
-    ("self_correction", score_self_correction),
+    ("register_consistency", score_register_consistency),
+    ("insertion_control", score_insertion_control),
 ]
 
 
@@ -351,13 +332,7 @@ def run_tier(checks, text):
 # Human article baselines (from 15 example articles, 2026-03-30)
 # Dimensions where AI over-optimizes: bell-curve scoring penalizes
 # both "too low" AND "too high" relative to human average.
-_BELL_CURVE_CHECKS = {
-    "broken_sentences": 0.39,
-    "self_correction": 0.20,
-    "sentence_length_range": 0.71,
-    "paragraph_length_variance": 0.52,
-    "banned_words": 0.73,
-}
+_BELL_CURVE_CHECKS = {}
 
 
 def _bell_curve(raw_score, center):
@@ -390,19 +365,14 @@ def calibrate_tiers(tier1, tier2):
                 data["score"] = calibrated
                 data["detail"] += f" [calibrated from {raw:.2f}, center={center}]"
 
-    # 2. Over-optimization penalty: if 60%+ of checks score > 0.8,
-    #    the article is suspiciously "perfect" — apply global penalty.
+    # Clear writing should not be penalized for scoring well.
     all_scores = []
     for tier in [tier1, tier2]:
         for name, data in tier.items():
             if not name.startswith("_"):
                 all_scores.append(data["score"])
 
-    high_count = sum(1 for s in all_scores if s > 0.8)
-    over_opt_ratio = high_count / len(all_scores) if all_scores else 0
     penalty = 1.0
-    if over_opt_ratio >= 0.6:
-        penalty = 0.85  # 15% penalty for suspiciously perfect articles
 
     if penalty < 1.0:
         for tier in [tier1, tier2]:
@@ -424,7 +394,7 @@ def calibrate_tiers(tier1, tier2):
 # ============================================================
 
 def compute_composite(tier1, tier2, tier3_score=None):
-    """Compute composite score (0=human, 100=AI).
+    """Compute compatibility risk score (0=lower risk, 100=higher risk).
 
     With tier3: T1=50%, T2=30%, T3=20%
     Without:    T1=62.5%, T2=37.5%
@@ -433,13 +403,13 @@ def compute_composite(tier1, tier2, tier3_score=None):
     t2_mean = tier2["_summary"]["mean_score"]
 
     if tier3_score is not None:
-        humanness = t1_mean * 0.50 + t2_mean * 0.30 + tier3_score * 0.20
+        quality = t1_mean * 0.50 + t2_mean * 0.30 + tier3_score * 0.20
         weights = {"tier1": 0.50, "tier2": 0.30, "tier3": 0.20}
     else:
-        humanness = t1_mean * 0.625 + t2_mean * 0.375
+        quality = t1_mean * 0.625 + t2_mean * 0.375
         weights = {"tier1": 0.625, "tier2": 0.375}
 
-    composite = round((1 - humanness) * 100, 2)
+    composite = round((1 - quality) * 100, 2)
     return composite, weights
 
 
@@ -474,6 +444,9 @@ def score_article(text, verbose=False, tier3_score=None):
     param_scores = build_param_scores(tier1, tier2)
 
     result = {
+        # Canonical public score: higher is better. composite_score remains for
+        # backward compatibility with history files created before v3.7.
+        "quality_score": round(100 - composite, 2),
         "composite_score": composite,
         "tier1": tier1,
         "tier2": tier2,
@@ -495,14 +468,14 @@ def score_article(text, verbose=False, tier3_score=None):
 
 def _print_verbose(result):
     """Print a human-readable report."""
-    composite = result["composite_score"]
+    quality = result["quality_score"]
     print(f"\n{'=' * 60}")
-    print(f"HUMANNESS SCORE: {composite:.1f}/100 (lower = more human)")
+    print(f"WRITING QUALITY SCORE: {quality:.1f}/100 (higher = better)")
     print(f"{'=' * 60}")
 
     for tier_name, tier_label, weight in [
-        ("tier1", "Tier 1 — Statistical", result["weights"].get("tier1", 0)),
-        ("tier2", "Tier 2 — Pattern", result["weights"].get("tier2", 0)),
+        ("tier1", "Tier 1 — Rhythm and readability", result["weights"].get("tier1", 0)),
+        ("tier2", "Tier 2 — Language risks", result["weights"].get("tier2", 0)),
     ]:
         tier = result[tier_name]
         summary = tier["_summary"]
@@ -523,7 +496,7 @@ def _print_verbose(result):
     else:
         print(f"\nTier 3 — LLM: not available (standalone mode)")
 
-    print(f"\nComposite: {composite:.1f} (0=完美人类, 100=明显AI)")
+    print(f"\nQuality: {quality:.1f} (100=better writing signals)")
     print(f"Weights: {result['weights']}")
 
     param_scores = result["param_scores"]
@@ -539,42 +512,17 @@ def _print_verbose(result):
 # ============================================================
 
 CALIBRATION_BASELINES = {
-    "pure_ai": {
-        "label": "Pure AI (typical ChatGPT output)",
-        "expected_composite_min": 75,
-        "expected_composite_max": 85,
-    },
-    "ai_with_editing": {
-        "label": "AI draft + human editing",
-        "expected_composite_min": 40,
-        "expected_composite_max": 55,
-    },
-    "human_written": {
-        "label": "Genuine human blog post",
-        "expected_composite_min": 15,
-        "expected_composite_max": 30,
-    },
-    "target_range": {
-        "label": "WeWrite target range",
-        "expected_composite_min": 25,
-        "expected_composite_max": 45,
-    },
+    "needs_edit": {"label": "Needs editing", "expected_quality_min": 0, "expected_quality_max": 49},
+    "review": {"label": "Review suggested", "expected_quality_min": 50, "expected_quality_max": 69},
+    "clear": {"label": "Few mechanical risks", "expected_quality_min": 70, "expected_quality_max": 100},
 }
 
 
 def _calibration_verdict(result):
     """Return calibration info dict with target range and verdict."""
-    composite = result["composite_score"]
-    target = CALIBRATION_BASELINES["target_range"]
-    t_min = target["expected_composite_min"]
-    t_max = target["expected_composite_max"]
-    if composite <= t_max:
-        if composite >= t_min:
-            verdict = "PASS: within target range"
-        else:
-            verdict = "PASS: below target (very human-like)"
-    else:
-        verdict = "WARNING: above target, needs more humanization"
+    quality = result["quality_score"]
+    t_min, t_max = 70, 100
+    verdict = "Few mechanical risks" if quality >= 70 else "Editorial review suggested"
     return {
         "target_min": t_min,
         "target_max": t_max,
@@ -584,26 +532,19 @@ def _calibration_verdict(result):
 
 def _print_calibration(result):
     """Print calibration comparison table."""
-    composite = result["composite_score"]
+    quality = result["quality_score"]
     cal = _calibration_verdict(result)
 
     print(f"\n{'=' * 60}")
     print(f"CALIBRATION COMPARISON")
     print(f"{'=' * 60}")
-    print(f"  Your article:  {composite:.1f}")
+    print(f"  Your article:  {quality:.1f}/100")
     print()
     for key, baseline in CALIBRATION_BASELINES.items():
-        lo = baseline["expected_composite_min"]
-        hi = baseline["expected_composite_max"]
+        lo = baseline["expected_quality_min"]
+        hi = baseline["expected_quality_max"]
         marker = ""
-        if key == "target_range":
-            if lo <= composite <= hi:
-                marker = "  <-- YOUR SCORE IS HERE"
-            elif composite < lo:
-                marker = "  (your score is below this)"
-            else:
-                marker = "  (your score is above this)"
-        elif lo <= composite <= hi:
+        if lo <= quality <= hi:
             marker = "  <-- YOUR SCORE IS HERE"
         print(f"  {baseline['label']:.<40s} {lo}-{hi}{marker}")
     print()
@@ -612,14 +553,14 @@ def _print_calibration(result):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Score article humanness (0=human, 100=AI)")
+    parser = argparse.ArgumentParser(description="Score article writing quality (0-100, higher is better)")
     parser.add_argument("input", help="Markdown article file")
     parser.add_argument("--verbose", "-v", action="store_true", help="Detailed report")
     parser.add_argument("--json", action="store_true", help="JSON output")
     parser.add_argument("--tier3", type=float, default=None,
                         help="Tier 3 LLM score (0-1), passed by agent from SKILL.md")
     parser.add_argument("--calibrate", action="store_true",
-                        help="Compare scores against calibration baselines")
+                        help="Show broad style-risk bands")
     args = parser.parse_args()
 
     text = Path(args.input).read_text(encoding="utf-8")
@@ -633,7 +574,7 @@ def main():
             result["calibration"] = _calibration_verdict(result)
         print(json.dumps(result, ensure_ascii=False, indent=2))
     elif not args.verbose and not args.calibrate:
-        print(f"{result['composite_score']:.1f}")
+        print(f"{result['quality_score']:.1f}")
 
 
 if __name__ == "__main__":

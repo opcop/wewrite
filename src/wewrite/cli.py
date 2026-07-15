@@ -24,6 +24,8 @@ _COMMANDS = {
     "fetch-article": ("wewrite.commands.fetch_article", "公众号文章 URL → Markdown"),
     "llm-write": ("wewrite.commands.llm_write", "混合路由写作（DeepSeek 等出稿）"),
     "similarity": ("wewrite.commands.similarity_check", "多平台版本原创度检查"),
+    "run": ("wewrite.commands.run_manager", "独立文章任务：开始 / 恢复 / 完成"),
+    "sources": ("wewrite.commands.source_ledger", "记录文章事实来源"),
     "build-playbook": ("wewrite.commands.build_playbook", "从历史语料生成 playbook"),
     "image-gen": ("wewrite.toolkit.image_gen", "AI 图片生成（多 provider fallback）"),
     "validate": ("wewrite.commands.validate_html", "HTML 微信兼容性校验"),

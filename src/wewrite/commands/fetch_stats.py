@@ -15,15 +15,12 @@ Requires: wechat appid/secret in config.yaml or env vars (WECHAT_APPID, WECHAT_S
 
 import argparse
 import json
-import os
 import sys
-import tempfile
 from datetime import datetime, timedelta
-from pathlib import Path
 
 import requests
-import yaml
 
+from ..history import load_history, save_history
 from ..paths import history_path
 
 # Import unified config loader
@@ -84,23 +81,6 @@ def fetch_article_total(token: str, date: str) -> list[dict]:
     return data["list"]
 
 
-def _atomic_write_yaml(path: Path, data: dict):
-    """Write YAML atomically: write to temp file then rename to prevent corruption."""
-    tmp_fd, tmp_path = tempfile.mkstemp(
-        dir=path.parent, suffix=".tmp", prefix=path.stem
-    )
-    try:
-        with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
-            yaml.dump(data, f, allow_unicode=True, default_flow_style=False)
-        os.replace(tmp_path, str(path))
-    except Exception:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise
-
-
 def update_history(stats_list: list[dict]):
     """Match stats to history.yaml entries and update.
 
@@ -113,9 +93,7 @@ def update_history(stats_list: list[dict]):
         print("No history.yaml found.")
         return
 
-    with open(history_file, "r", encoding="utf-8") as f:
-        history = yaml.safe_load(f) or {}
-
+    history = load_history(history_file)
     articles = history.get("articles", [])
     if not articles:
         print("No articles in history to update.")
@@ -161,7 +139,7 @@ def update_history(stats_list: list[dict]):
 
     if updated > 0:
         history["articles"] = articles
-        _atomic_write_yaml(history_file, history)
+        save_history(history, history_file)
         print(f"Updated stats for {updated} article(s).")
     else:
         print("No matching articles found in stats data.")

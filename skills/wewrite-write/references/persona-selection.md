@@ -32,9 +32,10 @@
 
 ## 执行方式
 
-人格选定后，加载对应文件：
+人格选定后，优先加载用户自定义文件，再加载内置文件：
 ```
-读取: {skill_dir}/personas/{人格名}.yaml
+检查: {home}/personas/{人格名}.yaml
+读取: {skill_dir}/personas/{人格名}.yaml（自定义文件不存在时）
 ```
 
 作为 Step 4 写作的硬性约束执行。

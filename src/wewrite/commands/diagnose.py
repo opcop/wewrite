@@ -14,11 +14,13 @@ import argparse
 import importlib
 import json
 import os
+import stat
 import sys
 from pathlib import Path
 
 import yaml
 
+from ..history import load_history
 from .. import paths
 
 # 内置写作人格预设（prompt 层数据，随 skill 仓库分发；CLI 只做名字校验）
@@ -53,6 +55,7 @@ WEIGHTS = {
     "config_file": 0,
     "wechat_credentials": 0,
     "image_api_key": 0,
+    "config_permissions": 0,
 }
 
 MAX_ANTI_AI_SCORE = sum(v for v in WEIGHTS.values() if v > 0)  # 13
@@ -103,6 +106,12 @@ def check_config():
     cfg = {}
     if config_path.exists():
         checks.append(make_check("config", "config_file", "pass", "found"))
+        mode = stat.S_IMODE(config_path.stat().st_mode)
+        if mode & 0o077:
+            checks.append(make_check(
+                "config", "config_permissions", "warn",
+                "config.yaml may contain secrets; run chmod 600",
+            ))
         with open(config_path, "r", encoding="utf-8") as f:
             cfg = yaml.safe_load(f) or {}
     else:
@@ -117,9 +126,14 @@ def check_config():
         checks.append(make_check("config", "wechat_credentials", "warn",
                                  "missing appid/secret", impact="skip_publish"))
 
-    # Image: config.image.api_key 或 env WEWRITE_IMAGE_API_KEY 任一即可
+    # Image: legacy key, provider chain, or env key — any valid source enables images.
     image = cfg.get("image", {}) or {}
-    if image.get("api_key") or _env_set("WEWRITE_IMAGE_API_KEY"):
+    providers = image.get("providers") or []
+    provider_chain_configured = isinstance(providers, list) and any(
+        isinstance(entry, dict) and entry.get("provider") and entry.get("api_key")
+        for entry in providers
+    )
+    if image.get("api_key") or provider_chain_configured or _env_set("WEWRITE_IMAGE_API_KEY"):
         checks.append(make_check("config", "image_api_key", "pass", "configured"))
     else:
         checks.append(make_check("config", "image_api_key", "warn",
@@ -138,6 +152,8 @@ def runtime_flags(checks):
         "skip_image_gen": warned("image_api_key"),
         # 配了写作模型（混合路由）→ Step 4 走 llm_write.py；否则编排器自写
         "use_writer_model": _env_set("WEWRITE_WRITER_API_KEY"),
+        # 首次使用是正常设置流程，不是安装失败。
+        "needs_onboard": warned("style_file"),
     }
 
 
@@ -147,7 +163,7 @@ def check_style():
     style_path = paths.style_path()
 
     if not style_path.exists():
-        checks.append(make_check("style", "style_file", "fail", "not found → run onboard first"))
+        checks.append(make_check("style", "style_file", "warn", "not found → first-run onboard required"))
         return checks
 
     checks.append(make_check("style", "style_file", "pass", "found"))
@@ -201,9 +217,7 @@ def check_enhancements():
     # history.yaml
     history_path = paths.history_path()
     if history_path.exists():
-        with open(history_path, "r", encoding="utf-8") as f:
-            data = yaml.safe_load(f)
-        articles = data if isinstance(data, list) else (data or {}).get("articles", [])
+        articles = load_history(history_path)["articles"]
         if articles:
             checks.append(make_check("enhancement", "history_articles", "pass", f"{len(articles)} articles"))
         else:
@@ -220,10 +234,7 @@ def check_dimensions():
     if not history_path.exists():
         return [make_check("dimensions", "dimension_variance", "skip", "no history.yaml")]
 
-    with open(history_path, "r", encoding="utf-8") as f:
-        data = yaml.safe_load(f)
-
-    articles = data if isinstance(data, list) else (data or {}).get("articles", [])
+    articles = load_history(history_path)["articles"]
     # Get last 3 articles that have dimensions
     recent = [a for a in articles if a.get("dimensions")][-3:]
 
@@ -263,7 +274,7 @@ def compute_summary(checks):
         if name == "style_file":
             recs.append('Run the skill once to trigger onboard（重新设置风格）')
         elif name == "writing_persona":
-            recs.append('Add writing_persona: "midnight-friend" to style.yaml (best humanness rate)')
+            recs.append('Add a writing_persona to style.yaml so the account voice stays consistent')
         elif name == "persona_file":
             recs.append(f'Persona file missing — check personas/ directory')
         elif name == "playbook":
@@ -283,6 +294,9 @@ def compute_summary(checks):
         "anti_ai_score": score,
         "anti_ai_max": MAX_ANTI_AI_SCORE,
         "anti_ai_level": level,
+        "style_setup_score": score,
+        "style_setup_max": MAX_ANTI_AI_SCORE,
+        "style_setup_level": level,
     }, recs
 
 
@@ -341,7 +355,7 @@ def format_text(checks, summary, recs):
     mx = summary["anti_ai_max"]
     filled = round(score / mx * 12) if mx else 0
     bar = "\u2588" * filled + "\u2591" * (12 - filled)
-    lines.append(f"Humanness level: {bar} {summary['anti_ai_level']} ({score}/{mx})")
+    lines.append(f"Style setup: {bar} {summary['style_setup_level']} ({score}/{mx})")
 
     if recs:
         lines.append("")

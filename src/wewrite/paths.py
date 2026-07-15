@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 
 # 状态目录下的子目录（ensure_home 时创建）
-_SUBDIRS = ["output", "exemplars", "corpus", "lessons", "themes"]
+_SUBDIRS = ["output", "runs", "exemplars", "corpus", "lessons", "themes", "personas"]
 
 
 def home() -> Path:
@@ -48,6 +48,14 @@ def writing_config_path() -> Path:
 
 def output_dir() -> Path:
     return home() / "output"
+
+
+def runs_dir() -> Path:
+    return home() / "runs"
+
+
+def current_run_path() -> Path:
+    return home() / "current_run"
 
 
 def exemplars_dir() -> Path:

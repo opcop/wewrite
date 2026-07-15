@@ -30,6 +30,9 @@ def create_draft(
     Returns DraftResult.
     Raise ValueError on error (errcode present and != 0).
     """
+    if not thumb_media_id:
+        raise ValueError("A cover image is required to create a WeChat draft")
+
     article = {
         "title": title,
         "author": author or "",
@@ -38,10 +41,7 @@ def create_draft(
         "show_cover_pic": 0,
     }
 
-    # thumb_media_id is required by WeChat API — if not provided,
-    # upload a default 1x1 white pixel, or skip if truly empty
-    if thumb_media_id:
-        article["thumb_media_id"] = thumb_media_id
+    article["thumb_media_id"] = thumb_media_id
 
     body = {"articles": [article]}
 
@@ -53,6 +53,7 @@ def create_draft(
         params={"access_token": access_token},
         data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
         headers={"Content-Type": "application/json; charset=utf-8"},
+        timeout=30,
     )
 
     data = resp.json()
@@ -78,6 +79,7 @@ def get_draft(access_token: str, media_id: str) -> str:
         "https://api.weixin.qq.com/cgi-bin/draft/get",
         params={"access_token": access_token},
         json={"media_id": media_id},
+        timeout=30,
     )
     resp.encoding = "utf-8"
     data = resp.json()
@@ -164,6 +166,7 @@ def create_image_post(
         params={"access_token": access_token},
         data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
         headers={"Content-Type": "application/json; charset=utf-8"},
+        timeout=30,
     )
 
     data = resp.json()

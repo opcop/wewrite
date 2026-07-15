@@ -21,13 +21,13 @@ allowed-tools:
 - **{home}**：用户状态目录 = `$WEWRITE_HOME` 或 `~/.wewrite`（`wewrite home` 可查）。config/style/history/playbook/output/exemplars 全在 {home}，不在仓库；references 文档中的状态路径同此约定。
 - **`读取: <路径>`** = 用文件读取工具真实读完该文件再继续，不是注释。
 - **references/**：本 skill 自带 `{skill_dir}/references/`；references 文档内的 `{skill_dir}` 即本 skill 目录。
-- **管道状态**：`{home}/output/_state.yaml`（契约见主入口 wewrite 的 `references/pipeline-state.md`）。
+- **任务状态**：用 `wewrite run show` 读取当前任务。
 
 ## 前置
 
-1. **源文章**：按优先级解析——用户指定的文件/粘贴内容 > `{home}/output/_state.yaml` 的
-   `article` 字段 > `{home}/output/article.md`。都没有 → 问用户"要改写哪篇？给我文件路径
-   或直接粘贴全文"。确定后把源复制/保存为 `{home}/output/source.md`（质量门要用）。
+1. **源文章**：按优先级解析——用户指定的文件/粘贴内容 > 当前任务的
+   `artifacts.article`。都没有 → 问用户"要改写哪篇？给我文件路径
+   或直接粘贴全文"。确定后把源复制/保存到当前任务目录的 `source.md`（质量门要用）。
 2. **目标平台**：用户点名了就用；没点名 → 列出 `{skill_dir}/platforms/` 下的可用
    平台（当前：xiaohongshu 小红书、douyin 抖音）问用户要哪几个，或"全部"。
 
@@ -43,9 +43,9 @@ allowed-tools:
    标签数、输出格式改写。
 2. 遵守 multiplatform-rewrite.md 的原创铁律（内容级真改，重构信息顺序/开头/表达，
    不是洗稿）与人设一致要求（persona 内核不变，只适配表达方式）。
-3. 过双质量门（multiplatform-rewrite.md「质量门」小节）：humanness ≥ 0.6、
+3. 过双质量门（multiplatform-rewrite.md「质量门」小节）：quality_score ≥ 60、
    与源及其他平台版本的 `max_similarity` ≤ 0.6；不过重写该版本，最多 2 次。
-4. 写到 `{home}/output/<platform 的 output_filename>`。
+4. 写到当前任务目录的 `<platform 的 output_filename>`，不覆盖源稿或其他任务。
 
 ## 完成
 
