@@ -29,15 +29,27 @@ _BROWSER_UA = (
     "Chrome/124.0.0.0 Safari/537.36"
 )
 
+# 微信 iOS WebView UA：带 MicroMessenger 关键词可绕过部分文章对外部访问的
+# "环境异常请完成验证" 拦截页（微信服务器按 UA 判定是否来自微信 App 内）
+_WECHAT_UA = (
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) "
+    "AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 "
+    "MicroMessenger/8.0.49(0x18003123) NetType/WIFI Language/zh_CN"
+)
+
 
 # ---------------------------------------------------------------------------
-# Fetching: three-level strategy
+# Fetching: multi-level strategy
 # ---------------------------------------------------------------------------
 
-def _fetch_requests(url: str, timeout: int = 20) -> str | None:
+def _fetch_requests(url: str, timeout: int = 20, ua: str = _BROWSER_UA,
+                    referer: str | None = None) -> str | None:
     """Level 1: plain requests. Returns HTML string or None on failure."""
+    headers = {"User-Agent": ua}
+    if referer:
+        headers["Referer"] = referer
     try:
-        resp = requests.get(url, headers={"User-Agent": _BROWSER_UA}, timeout=timeout)
+        resp = requests.get(url, headers=headers, timeout=timeout)
         resp.raise_for_status()
         resp.encoding = "utf-8"
         return resp.text
@@ -99,6 +111,13 @@ def fetch_html(url: str) -> str:
     """
     # Level 1: plain requests
     html = _fetch_requests(url)
+    if html and _has_content(html):
+        return html
+
+    # Level 1b: 微信 WebView UA 重试（针对"环境异常"拦截页），仍是纯 requests，
+    # 成本远低于掉进浏览器层
+    print("浏览器 UA 未获取到正文，尝试微信 WebView UA...", file=sys.stderr)
+    html = _fetch_requests(url, ua=_WECHAT_UA, referer="https://mp.weixin.qq.com/")
     if html and _has_content(html):
         return html
 
@@ -332,10 +351,8 @@ def main():
 
     result = fetch_article(url=args.url, file_path=args.file_path)
 
-    if args.as_json:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-    elif args.output:
-        # Write Markdown with YAML frontmatter
+    if args.output:
+        # Write Markdown with YAML frontmatter（与 --json 正交：给了 -o 就落盘）
         out = Path(args.output)
         frontmatter = f"---\ntitle: \"{result['title']}\"\nauthor: \"{result['author']}\"\n"
         if result["publish_time"]:
@@ -344,8 +361,11 @@ def main():
             frontmatter += f"source: \"{result['url']}\"\n"
         frontmatter += "---\n\n"
         out.write_text(frontmatter + result["markdown"], encoding="utf-8")
-        print(f"Saved: {out}")
-    else:
+        print(f"Saved: {out}", file=sys.stderr)
+
+    if args.as_json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    elif not args.output:
         if result["title"]:
             print(f"# {result['title']}\n")
         if result["author"]:
