@@ -7,7 +7,7 @@
 选题 · 写作 · 质量评分 · AI 配图 · 16 主题排版 · 草稿箱推送 · 多平台改写 · 越用越像你
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/imraywang/wewrite/blob/main/LICENSE)
-[![Build](https://github.com/imraywang/wewrite/actions/workflows/build-openclaw.yml/badge.svg)](https://github.com/imraywang/wewrite/actions)
+[![Checks](https://github.com/imraywang/wewrite/actions/workflows/checks.yml/badge.svg)](https://github.com/imraywang/wewrite/actions/workflows/checks.yml)
 [![PyPI](https://img.shields.io/pypi/v/wewrite?color=059669&label=PyPI)](https://pypi.org/project/wewrite/)
 [![Skills](https://img.shields.io/badge/skills-1%20主入口%20%2B%209%20模块-8b5cf6)](#-模块速查)
 [![Themes](https://img.shields.io/badge/themes-16%20%2B%20learn--theme-f59e0b)](#-排版引擎)
