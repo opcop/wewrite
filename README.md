@@ -6,8 +6,8 @@
 
 选题 · 写作 · 编辑审稿 · 可选 AI 配图 · 18 主题排版 · 草稿箱推送 · 多平台改写 · 越用越像你
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/imraywang/wewrite/blob/main/LICENSE)
-[![Checks](https://github.com/imraywang/wewrite/actions/workflows/checks.yml/badge.svg)](https://github.com/imraywang/wewrite/actions/workflows/checks.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/opcop/wewrite/blob/main/LICENSE)
+[![Checks](https://github.com/opcop/wewrite/actions/workflows/checks.yml/badge.svg)](https://github.com/opcop/wewrite/actions/workflows/checks.yml)
 [![PyPI](https://img.shields.io/pypi/v/wewrite?color=059669&label=PyPI)](https://pypi.org/project/wewrite/)
 [![Skills](https://img.shields.io/badge/skills-1%20主入口%20%2B%209%20模块-8b5cf6)](#-模块速查)
 [![Themes](https://img.shields.io/badge/themes-18%20%2B%20learn--theme-f59e0b)](#-排版引擎)
@@ -45,18 +45,18 @@
 
 ## 👀 效果预览
 
-同一篇示例文章（[docs/demo-article.md](https://github.com/imraywang/wewrite/blob/main/docs/demo-article.md)）× 6 个主题，`wewrite preview` 真实渲染长图（含 label 小标签、steps 步骤卡、callout / timeline / quote / summary 组件与 AIGC 声明脚注）：
+同一篇示例文章（[docs/demo-article.md](https://github.com/opcop/wewrite/blob/main/docs/demo-article.md)）× 6 个主题，`wewrite preview` 真实渲染长图（含 label 小标签、steps 步骤卡、callout / timeline / quote / summary 组件与 AIGC 声明脚注）：
 
 <table>
 <tr>
-<td width="33%" align="center"><img src="https://raw.githubusercontent.com/imraywang/wewrite/main/docs/screenshots/professional-clean.png" width="250"><br><sub><b>professional-clean（默认）</b></sub></td>
-<td width="33%" align="center"><img src="https://raw.githubusercontent.com/imraywang/wewrite/main/docs/screenshots/sspai.png" width="250"><br><sub><b>sspai</b></sub></td>
-<td width="33%" align="center"><img src="https://raw.githubusercontent.com/imraywang/wewrite/main/docs/screenshots/warm-editorial.png" width="250"><br><sub><b>warm-editorial</b></sub></td>
+<td width="33%" align="center"><img src="https://raw.githubusercontent.com/opcop/wewrite/main/docs/screenshots/professional-clean.png" width="250"><br><sub><b>professional-clean（默认）</b></sub></td>
+<td width="33%" align="center"><img src="https://raw.githubusercontent.com/opcop/wewrite/main/docs/screenshots/sspai.png" width="250"><br><sub><b>sspai</b></sub></td>
+<td width="33%" align="center"><img src="https://raw.githubusercontent.com/opcop/wewrite/main/docs/screenshots/warm-editorial.png" width="250"><br><sub><b>warm-editorial</b></sub></td>
 </tr>
 <tr>
-<td width="33%" align="center"><img src="https://raw.githubusercontent.com/imraywang/wewrite/main/docs/screenshots/tech-modern.png" width="250"><br><sub><b>tech-modern</b></sub></td>
-<td width="33%" align="center"><img src="https://raw.githubusercontent.com/imraywang/wewrite/main/docs/screenshots/bauhaus.png" width="250"><br><sub><b>bauhaus</b></sub></td>
-<td width="33%" align="center"><img src="https://raw.githubusercontent.com/imraywang/wewrite/main/docs/screenshots/midnight.png" width="250"><br><sub><b>midnight</b></sub></td>
+<td width="33%" align="center"><img src="https://raw.githubusercontent.com/opcop/wewrite/main/docs/screenshots/tech-modern.png" width="250"><br><sub><b>tech-modern</b></sub></td>
+<td width="33%" align="center"><img src="https://raw.githubusercontent.com/opcop/wewrite/main/docs/screenshots/bauhaus.png" width="250"><br><sub><b>bauhaus</b></sub></td>
+<td width="33%" align="center"><img src="https://raw.githubusercontent.com/opcop/wewrite/main/docs/screenshots/midnight.png" width="250"><br><sub><b>midnight</b></sub></td>
 </tr>
 </table>
 
@@ -73,7 +73,7 @@
 ### 方式一：一键安装（推荐）
 
 ```bash
-git clone --depth 1 https://github.com/imraywang/wewrite.git ~/wewrite
+git clone --depth 1 https://github.com/opcop/wewrite.git ~/wewrite
 cd ~/wewrite && bash install.sh
 ```
 
@@ -92,7 +92,7 @@ cd ~/wewrite && bash install.sh
 ### 方式二：skills.sh 按需挑模块
 
 ```bash
-npx skills add imraywang/wewrite
+npx skills add opcop/wewrite
 ```
 
 skill 目录自包含、复制即用；CLI 另装一条：`uv tool install wewrite`（或 `pipx install wewrite`）。
@@ -101,7 +101,7 @@ skill 目录自包含、复制即用；CLI 另装一条：`uv tool install wewri
 
 对任意 Agent 说一句：
 
-> 请帮我安装 https://github.com/imraywang/wewrite 这个 skill（跑仓库里的 install.sh）
+> 请帮我安装 https://github.com/opcop/wewrite 这个 skill（跑仓库里的 install.sh）
 
 装好后直接开聊：
 
@@ -138,9 +138,9 @@ skill 目录自包含、复制即用；CLI 另装一条：`uv tool install wewri
 
 - **有 Git**（推荐）：开始菜单搜 `PowerShell` 打开，执行
   ```powershell
-  git clone --depth 1 https://github.com/imraywang/wewrite.git C:\wewrite
+  git clone --depth 1 https://github.com/opcop/wewrite.git C:\wewrite
   ```
-- **没 Git**：打开 https://github.com/imraywang/wewrite → 点绿色 `Code` → `Download ZIP` → 解压到 `C:\wewrite`（解压出的文件夹名可能是 `wewrite-main`，进去后再操作即可）。
+- **没 Git**：打开 https://github.com/opcop/wewrite → 点绿色 `Code` → `Download ZIP` → 解压到 `C:\wewrite`（解压出的文件夹名可能是 `wewrite-main`，进去后再操作即可）。
 
 #### 第 2 步：运行安装脚本（装到 WorkBuddy）
 
@@ -188,7 +188,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
   ```powershell
   $env:WORKBUDDY_SKILLS_DIR = "D:\我的项目\.workbuddy\skills"
   ```
-- **不想用命令行、能不能让 WorkBuddy 自己装？** → 可以，对新对话说「请帮我安装 https://github.com/imraywang/wewrite 这个 skill，跑里面的 install.ps1 并装到 WorkBuddy」，让它代跑第 2 步。
+- **不想用命令行、能不能让 WorkBuddy 自己装？** → 可以，对新对话说「请帮我安装 https://github.com/opcop/wewrite 这个 skill，跑里面的 install.ps1 并装到 WorkBuddy」，让它代跑第 2 步。
 
 <details>
 <summary><b>OpenClaw / Codex / Hermes</b>（三家均原生支持 folder-per-skill，无需构建转换）</summary>
@@ -203,7 +203,7 @@ for s in ~/wewrite/skills/wewrite*; do ln -sfn "$s" ~/.openclaw/skills/$(basenam
 **Hermes**（自带技能管理器）：
 
 ```bash
-hermes skills install imraywang/wewrite
+hermes skills install opcop/wewrite
 ```
 
 **WorkBuddy（CodeBuddy 系，folder-per-skill 原生兼容）**：`install.sh` 检测到 `~/.workbuddy` 时会自动把 10 个 skill 符号链接到 `~/.workbuddy/skills/`；也可显式指定目录：
@@ -315,7 +315,7 @@ WeWrite 的目标是**写出准确、有观点、对读者有用的文章**。�
 
 每篇任务保留 `brief.yaml`、`claims.yaml`、`draft.md`、`article.md` 和
 `review-report.json`，方便追溯“为什么这样写”和初稿到成稿改了多少。完整标准见
-[`docs/content-quality-rubric.md`](https://github.com/imraywang/wewrite/blob/main/docs/content-quality-rubric.md)。
+[`docs/content-quality-rubric.md`](https://github.com/opcop/wewrite/blob/main/docs/content-quality-rubric.md)。
 
 ## 🎨 排版引擎
 
@@ -426,7 +426,7 @@ Step 6  封存原始正文 → 写入历史                         ← 主入�
 默认连续完成正文，但“写一篇”只交付本地成稿。“完整制作”是正文、配图和本地预览三个独立
 动作的组合快捷方式；“推到草稿箱”才授予发布权限，而且不会自动生图。已完成文章可以继续
 配图、排版或发布，原始正文不被覆盖。每篇文章使用独立任务目录并可恢复（契约见
-[`skills/wewrite/references/pipeline-state.md`](https://github.com/imraywang/wewrite/blob/main/skills/wewrite/references/pipeline-state.md)）。
+[`skills/wewrite/references/pipeline-state.md`](https://github.com/opcop/wewrite/blob/main/skills/wewrite/references/pipeline-state.md)）。
 
 <details>
 <summary><b>📁 目录结构</b></summary>
@@ -474,7 +474,7 @@ cd <仓库路径> && git pull && bash install.sh
 
 ## ⭐ Star History
 
-[![Star History](https://raw.githubusercontent.com/imraywang/wewrite/main/docs/star-history.svg)](https://star-history.com/#imraywang/wewrite&Date)
+[![Star History](https://raw.githubusercontent.com/opcop/wewrite/main/docs/star-history.svg)](https://star-history.com/#opcop/wewrite&Date)
 
 <sub>图表自托管：GitHub 新的 API 限制下，star-history.com 需自备 fine-grained PAT，而 README 嵌入无法安全携带 token——本图由 [CI](.github/workflows/star-history.yml) 用仓库自身 token 每周刷新；点击可看交互版。</sub>
 
