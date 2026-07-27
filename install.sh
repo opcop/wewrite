@@ -7,15 +7,18 @@
 #    在 dist 拷贝（无 pyproject.toml）里运行时自动改为从 git 安装。
 # 2) 把 skills/ 下的主入口与各 wewrite-* 模块符号链接到
 #    ~/.claude/skills/ 和 ~/.agents/skills/（可用环境变量覆盖）；
-#    检测到 OpenClaw / Codex 时（~/.openclaw、~/.codex 存在）同样链接——
-#    三家均原生支持 folder-per-skill 的 Agent Skills 标准。
+#    检测到 OpenClaw / Codex / WorkBuddy 时（对应家目录存在）同样链接——
+#    各家均原生支持 folder-per-skill 的 Agent Skills 标准。
 # 3) 检测到 v2.1 之前留在仓库根的用户状态（style.yaml 等）时，
 #    执行 `wewrite migrate` 迁到 $WEWRITE_HOME（默认 ~/.wewrite，幂等）。
 #
 # 用法：  bash install.sh
 # 幂等：  可重复运行。
 
-set -euo pipefail
+# 注:故意不加 `u`(nounset)。macOS 自带 bash 为 3.2,其对多字节字符(如 →)与
+# `set -u` 的组合解析有 bug:会把已正常赋值的变量误报 "unbound variable"。
+# 详见 https://stackoverflow.com/questions/ (bash-3-2-multibyte-set-u)。
+set -eo pipefail
 
 cd "$(dirname "$0")"
 REPO="$(pwd)"
@@ -56,11 +59,15 @@ command -v wewrite >/dev/null 2>&1 && echo "✓ wewrite CLI 就绪：$(command -
   || echo "⚠ 当前 shell 尚未找到 wewrite，重开终端或检查 PATH" >&2
 
 # ---- 2) skill 链接：Claude Code + Agent-Skills 标准目录；
-#      装了 OpenClaw / Codex 的机器（其家目录已存在）也一并链接 ----
+#      装了 OpenClaw / Codex / WorkBuddy 的机器（其家目录已存在）也一并链接 ----
 DESTS=("${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}" "${AGENTS_SKILLS_DIR:-$HOME/.agents/skills}")
-for OPT in "$HOME/.openclaw/skills" "$HOME/.codex/skills"; do
+for OPT in "$HOME/.openclaw/skills" "$HOME/.codex/skills" "$HOME/.workbuddy/skills"; do
   [ -d "$(dirname "$OPT")" ] && DESTS+=("$OPT")
 done
+# WorkBuddy 也可通过环境变量精确指定（如项目级 .workbuddy/skills）
+if [ -n "${WORKBUDDY_SKILLS_DIR:-}" ]; then
+  DESTS+=("$WORKBUDDY_SKILLS_DIR")
+fi
 if [ -d skills ]; then
   for SKILLS_TARGET in "${DESTS[@]}"; do
     # 防呆：目标本身是指回本仓库的符号链接时，逐 skill 链接会写回仓库内，跳过
