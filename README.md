@@ -86,6 +86,8 @@ cd ~/wewrite && bash install.sh
 > ```
 >
 > 可选参数：`-UseSymlinks`（改用符号链接，需管理员/开发者模式）、`-SkillsOnly`（只复制 skills）、`-CliOnly`（只装 CLI）。环境变量 `CLAUDE_SKILLS_DIR` / `AGENTS_SKILLS_DIR` / `WORKBUDDY_SKILLS_DIR` 可精确指定目标目录。CLI 同样需 `uv tool install wewrite`（脚本会自动尝试）。
+>
+> 🪟 **Windows + WorkBuddy 的纯小白一步步教程**见下方「Windows 小白专用」小节。
 
 ### 方式二：skills.sh 按需挑模块
 
@@ -115,6 +117,78 @@ skill 目录自包含、复制即用；CLI 另装一条：`uv tool install wewri
 你：做一个小绿书                    → 图片帖（横滑轮播）
 你：更新                            → 升级到最新版
 ```
+
+### 🪟 Windows 小白专用：在 WorkBuddy 里安装 WeWrite（最省心路径）
+
+本小节专给「用 Windows、第一次接触命令行、想在 WorkBuddy 里用 WeWrite」的同学。跟着做，不碰复杂配置也能跑起来。
+
+> WeWrite = **10 个 skill**（写作/选题/排版/发布…）+ 一个 **`wewrite` 命令行工具（CLI）**。skill 负责「动脑判断」，CLI 负责「排版/发布/评分」等确定性操作。两条都装最稳；只想先试写作也能只装 skill。
+
+#### 第 0 步：先装好 3 样东西（一次性）
+
+| 要装 | 干嘛用 | 下载 / 安装时注意 |
+|------|--------|-------------------|
+| **Git for Windows** | 把 WeWrite 文件夹拉到本地（也可以用「下载 ZIP」代替，见下） | 官网 git-scm.com，一路下一步即可 |
+| **Python 3.11+** | 安装 `wewrite` CLI | python.org/downloads/windows **务必勾选「Add python.exe to PATH」**；装完开一个新「终端 / PowerShell」输入 `python --version` 能出版本号就成功了 |
+| **终端** | 跑安装命令 | Windows 自带：开始菜单搜「PowerShell」或「终端 (Windows Terminal)」即可，不用额外装 |
+
+> 进阶可选：装一个 `uv`（`pip install uv` 或官网脚本）能让 CLI 安装更快更干净；不装也完全没问题，脚本会自动回退用 Python 自带方式。
+
+#### 第 1 步：拿到 WeWrite 文件夹
+
+- **有 Git**（推荐）：开始菜单搜 `PowerShell` 打开，执行
+  ```powershell
+  git clone --depth 1 https://github.com/imraywang/wewrite.git C:\wewrite
+  ```
+- **没 Git**：打开 https://github.com/imraywang/wewrite → 点绿色 `Code` → `Download ZIP` → 解压到 `C:\wewrite`（解压出的文件夹名可能是 `wewrite-main`，进去后再操作即可）。
+
+#### 第 2 步：运行安装脚本（装到 WorkBuddy）
+
+在 PowerShell 里进入文件夹并执行安装（脚本会自动把 10 个 skill 复制进 WorkBuddy 的 skills 目录，并尝试安装 CLI）：
+
+```powershell
+# 进入文件夹（用你实际的位置；ZIP 解压出来的可能带 -main 后缀）
+cd C:\wewrite
+
+# 明确告诉脚本：skill 装到 WorkBuddy 的用户级 skills 目录
+$env:WORKBUDDY_SKILLS_DIR = "$env:USERPROFILE\.workbuddy\skills"
+
+# 运行安装（Bypass 只是本次放行脚本执行，安全）
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+看到 `已复制 10 个 skill 到 ...\.workbuddy\skills` 和 `wewrite CLI 就绪` 就成功了。
+
+> 想只装 skill、暂不装 CLI（写作能用，但排版预览 / 发布 / 评分等需要 CLI 的功能暂时用不了）？把最后一行换成：
+> ```powershell
+> powershell -ExecutionPolicy Bypass -File .\install.ps1 -SkillsOnly
+> ```
+
+#### 第 3 步：重启 WorkBuddy，验证
+
+1. **完全退出并重新打开 WorkBuddy**（让它在 `~/.workbuddy/skills/` 里扫到新 skill）。
+2. 开个新对话，直接说：
+   > 用 wewrite 帮我写一篇公众号文章
+   
+   如果它开始抓热点、出选题、写稿，说明装好了。
+3. （可选）开一个新「终端 / PowerShell」输入 `wewrite --version`，能显示版本号说明 CLI 也在 PATH 里了。
+
+#### 第 4 步：要「发公众号草稿箱 / 生图」再补配置
+
+- **只用写作、本地排版预览**：什么都不用配，开箱即用。
+- **想推到公众号草稿箱**：需要公众号 `appid`/`secret`。把仓库里的 `config.example.yaml` 复制为 `C:\Users\你的用户名\.wewrite\config.yaml` 并填好（详见下方「配置（可选）」）。
+- **想 AI 生图**：再填一个图片 API key。
+
+#### 常见问题（小白 FAQ）
+
+- **「无法加载文件 …，因为在此系统上禁止运行脚本」** → 就是没加 `-ExecutionPolicy Bypass`，照第 2 步的命令跑即可。
+- **装完在 WorkBuddy 里没看到 wewrite** → 先彻底退出重开 WorkBuddy；再去 `C:\Users\你的用户名\.workbuddy\skills\` 看里面是不是有 `wewrite`、`wewrite-topic` 等文件夹。没有就重跑第 2 步。
+- **`wewrite` 命令找不到** → 开个**新**终端再试 `wewrite --version`；还不行说明 Python 的 Scripts 目录没在 PATH（通常是 `%APPDATA%\Python\Scripts`），把该目录加进系统 PATH 或重开终端即可。
+- **想装到某个具体项目、而不是所有项目** → 把 `WORKBUDDY_SKILLS_DIR` 指向项目目录下的 `.workbuddy\skills`，例如：
+  ```powershell
+  $env:WORKBUDDY_SKILLS_DIR = "D:\我的项目\.workbuddy\skills"
+  ```
+- **不想用命令行、能不能让 WorkBuddy 自己装？** → 可以，对新对话说「请帮我安装 https://github.com/imraywang/wewrite 这个 skill，跑里面的 install.ps1 并装到 WorkBuddy」，让它代跑第 2 步。
 
 <details>
 <summary><b>OpenClaw / Codex / Hermes</b>（三家均原生支持 folder-per-skill，无需构建转换）</summary>
